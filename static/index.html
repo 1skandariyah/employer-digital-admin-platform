@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Social Media / Digital Admin Preference</title>
+    <link rel="stylesheet" href="/styles.css?v=6">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Social Media / Digital Admin Preference</h1>
+        <p>Candidate profile review for social media admin roles.</p>
+      </div>
+    </header>
+
+    <main>
+      <section id="landing" class="landing-grid">
+        <section class="panel">
+          <h2>Start Session</h2>
+          <p class="muted">Enter the session code provided to you.</p>
+          <form id="respondent-entry-form">
+            <label>
+              Session code
+              <input name="sessionId" inputmode="numeric" required placeholder="Example: 12">
+            </label>
+            <button type="submit">Start</button>
+            <p id="respondent-entry-status" class="muted"></p>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Staff Access</h2>
+          <p class="muted">For session staff managing scheduled reviews.</p>
+          <form id="enumerator-login-form">
+            <label>
+              Passcode
+              <input name="passcode" type="password" inputmode="numeric" autocomplete="off" required>
+            </label>
+            <button type="submit">Open Staff Dashboard</button>
+            <p id="enumerator-login-status" class="muted"></p>
+          </form>
+        </section>
+      </section>
+
+      <section id="dashboard" class="layout hidden">
+        <aside class="panel">
+          <h2>Create Session</h2>
+          <form id="session-form">
+            <label>
+              Employer name
+              <input name="employerName" required placeholder="Respondent name">
+            </label>
+            <label>
+              Business name
+              <input name="businessName" placeholder="MSME name">
+            </label>
+            <label>
+              Contact
+              <input name="contact" placeholder="Phone or email">
+            </label>
+            <label>
+              Enumerator
+              <select name="enumeratorId" required></select>
+            </label>
+            <label>
+              Treatment arm
+              <select name="treatmentArm" required>
+                <option value="transparent">Transparent</option>
+                <option value="hidden">Hidden with reveal</option>
+              </select>
+            </label>
+            <label>
+              Reveal type
+              <select name="revealType" required>
+                <option value="productivity">Productivity information</option>
+                <option value="placebo">Placebo information</option>
+              </select>
+            </label>
+            <label>
+              Candidate set
+              <select name="candidateSetId" required></select>
+            </label>
+            <label>
+              Number of candidates to review
+              <select name="candidateLimit" required>
+                <option value="3">3 candidates</option>
+                <option value="5">5 candidates</option>
+                <option value="10">10 candidates</option>
+                <option value="15">15 candidates</option>
+                <option value="20" selected>20 candidates</option>
+              </select>
+            </label>
+            <label>
+              Delivery mode
+              <select name="mode" required>
+                <option value="online">Online guided</option>
+                <option value="offline">Offline guided</option>
+              </select>
+            </label>
+            <label>
+              Randomization seed
+              <input name="randomizationSeed" inputmode="numeric" placeholder="Optional">
+            </label>
+            <button type="submit">Create guided session</button>
+          </form>
+          <section class="candidate-tools">
+            <h2>Candidate Data</h2>
+            <a class="button secondary" href="/api/candidates.csv">Download CSV</a>
+            <label>
+              Import edited CSV
+              <input id="candidate-csv" type="file" accept=".csv,text/csv">
+            </label>
+            <button id="import-candidates" class="secondary" type="button">Import CSV</button>
+            <p id="candidate-import-status" class="muted"></p>
+          </section>
+        </aside>
+
+        <section class="panel">
+          <div class="section-heading">
+            <h2>Enumerator Dashboard</h2>
+            <div class="dashboard-actions">
+              <a class="button secondary" href="/api/export/responses.csv">Export CSV</a>
+              <button id="refresh-sessions" class="secondary" type="button">Refresh</button>
+            </div>
+          </div>
+          <div id="session-list" class="session-list"></div>
+        </section>
+      </section>
+
+      <section id="respondent" class="panel respondent hidden"></section>
+    </main>
+
+    <template id="candidate-template">
+      <article class="candidate-card">
+        <div class="candidate-header">
+          <div>
+            <p class="eyebrow"></p>
+            <h2></h2>
+          </div>
+        </div>
+        <div class="candidate-grid"></div>
+        <section class="productivity-block"></section>
+        <form class="response-form">
+          <fieldset>
+            <legend>Monthly pay assessment</legend>
+            <label>
+              Based on this profile, how much do you think this person is worth to be paid monthly to manage your social media?
+              <input name="wageValue" inputmode="numeric" required placeholder="Monthly wage in IDR">
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Hiring interest</legend>
+            <div class="choice-row">
+              <label><input type="radio" name="hireInterest" value="yes" required> Yes</label>
+              <label><input type="radio" name="hireInterest" value="no" required> No</label>
+            </div>
+          </fieldset>
+          <fieldset class="reasons-fieldset">
+            <legend>Reasons</legend>
+            <p class="muted">Tick all that apply, then rank the selected reasons.</p>
+            <div class="reason-options"></div>
+            <div class="ranked-reasons"></div>
+          </fieldset>
+          <fieldset>
+            <legend>Monthly salary offer</legend>
+            <label>
+              If somehow you wanted or needed to hire this person, what monthly salary would you be willing to offer?
+              <input name="conditionalWageOffer" inputmode="numeric" required placeholder="Monthly salary in IDR">
+            </label>
+          </fieldset>
+          <div class="nav-actions">
+            <button class="secondary previous-step" type="button">Previous</button>
+            <button type="submit">Save and continue</button>
+          </div>
+        </form>
+      </article>
+    </template>
+
+    <script src="/app.js?v=19"></script>
+  </body>
+</html>
