@@ -6,12 +6,13 @@ import json
 import math
 import os
 import random
+import re
 import sqlite3
 import time
 from datetime import date, datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from experiment import build_flow, next_resume_step, randomized_candidate_order
 from seed_data import (
@@ -192,6 +193,11 @@ def init_database() -> None:
 
 def migrate_database(conn: sqlite3.Connection) -> None:
     session_columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
+    if "session_code" not in session_columns:
+        conn.execute("ALTER TABLE sessions ADD COLUMN session_code TEXT")
+        conn.execute("UPDATE sessions SET session_code = CAST(id AS TEXT) WHERE session_code IS NULL OR session_code = ''")
+    conn.execute("UPDATE sessions SET session_code = CAST(id AS TEXT) WHERE session_code IS NULL OR session_code = ''")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_session_code ON sessions(session_code)")
     if "requested_candidate_count" not in session_columns:
         conn.execute("ALTER TABLE sessions ADD COLUMN requested_candidate_count INTEGER NOT NULL DEFAULT 20")
 
@@ -211,7 +217,7 @@ def migrate_database(conn: sqlite3.Connection) -> None:
         )
 
     for applies_to, label, sort_order in REASON_OPTIONS:
-        conn.execute(
+        cursor = conn.execute(
             """
             UPDATE reason_options
             SET label = ?
@@ -219,6 +225,11 @@ def migrate_database(conn: sqlite3.Connection) -> None:
             """,
             (label, applies_to, sort_order),
         )
+        if cursor.rowcount == 0:
+            conn.execute(
+                "INSERT INTO reason_options (applies_to, label, sort_order) VALUES (?, ?, ?)",
+                (applies_to, label, sort_order),
+            )
 
     experience_by_code = {
         "C-101": "0 years 6 months",
@@ -298,6 +309,44 @@ def read_json_body(handler: SimpleHTTPRequestHandler) -> dict:
     if length == 0:
         return {}
     return json.loads(handler.rfile.read(length).decode("utf-8"))
+
+
+SESSION_CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+
+
+def normalize_session_code(value: object) -> str:
+    code = str(value or "").strip()
+    if not code:
+        return ""
+    if not SESSION_CODE_RE.fullmatch(code):
+        raise ValueError("Session code may contain letters, numbers, hyphen, or underscore, up to 32 characters")
+    return code
+
+
+def validate_custom_session_code(code: str) -> None:
+    if code.isdigit():
+        raise ValueError("Custom session code must include at least one letter, hyphen, or underscore")
+
+
+def session_locator_from_path(path: str) -> str:
+    parts = path.strip("/").split("/")
+    if len(parts) < 3:
+        raise ValueError("Missing session code")
+    return unquote(parts[2])
+
+
+def resolve_session_id(conn: sqlite3.Connection, locator: str) -> int | None:
+    if locator.isdigit():
+        row = conn.execute(
+            "SELECT id FROM sessions WHERE id = ? OR session_code = ?",
+            (int(locator), locator),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM sessions WHERE session_code = ?",
+            (locator,),
+        ).fetchone()
+    return None if row is None else int(row["id"])
 
 
 CHARACTERISTIC_CHOICES = {
@@ -505,6 +554,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 self.handle_save_response(parsed.path)
             elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/characteristics"):
                 self.handle_save_employer_characteristics(parsed.path)
+            elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/code"):
+                self.handle_update_session_code(parsed.path)
             else:
                 self.send_json({"error": "Unknown endpoint"}, status=404)
         except ValueError as exc:
@@ -562,8 +613,12 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         self.send_json({"sessions": sessions})
 
     def handle_get_session(self, path: str) -> None:
-        session_id = int(path.split("/")[3])
+        locator = session_locator_from_path(path)
         with connect() as conn:
+            session_id = resolve_session_id(conn, locator)
+            if session_id is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
             session = conn.execute(
                 """
                 SELECT s.*, e.name AS employer_name, e.business_name, u.name AS enumerator_name
@@ -659,10 +714,20 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
         seed = int(payload.get("randomizationSeed") or int(time.time() * 1000) % 2_147_483_647)
+        requested_session_code = normalize_session_code(payload.get("sessionCode"))
+        if requested_session_code:
+            validate_custom_session_code(requested_session_code)
         requested_candidate_count = int(payload["candidateLimit"])
         if requested_candidate_count not in (3, 5, 10, 15, 20):
             raise ValueError("Candidate count must be one of 3, 5, 10, 15, or 20")
         with connect() as conn:
+            if requested_session_code:
+                existing_code = conn.execute(
+                    "SELECT 1 FROM sessions WHERE session_code = ?",
+                    (requested_session_code,),
+                ).fetchone()
+                if existing_code is not None:
+                    raise ValueError("Session code is already used")
             employer = conn.execute(
                 "INSERT INTO employers (name, business_name, contact) VALUES (?, ?, ?)",
                 (payload["employerName"], payload.get("businessName"), payload.get("contact")),
@@ -688,6 +753,11 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 ),
             )
             session_id = session.lastrowid
+            session_code = requested_session_code or str(session_id)
+            conn.execute(
+                "UPDATE sessions SET session_code = ? WHERE id = ?",
+                (session_code, session_id),
+            )
             candidate_ids = [
                 row[0]
                 for row in conn.execute(
@@ -729,6 +799,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                     "session_assignment",
                     json.dumps(
                         {
+                            "session_code": session_code,
                             "treatment_arm": payload["treatmentArm"],
                             "reveal_type": payload["revealType"],
                             "candidate_set_id": int(payload["candidateSetId"]),
@@ -742,11 +813,15 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 ),
             )
             conn.commit()
-        self.send_json({"sessionId": session_id})
+        self.send_json({"sessionId": session_id, "sessionCode": session_code})
 
     def handle_delete_session(self, path: str) -> None:
-        session_id = int(path.split("/")[3])
+        locator = session_locator_from_path(path)
         with connect() as conn:
+            session_id = resolve_session_id(conn, locator)
+            if session_id is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
             row = conn.execute("SELECT employer_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
             if row is None:
                 self.send_json({"error": "Session not found"}, status=404)
@@ -759,6 +834,31 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 conn.execute("DELETE FROM employers WHERE id = ?", (employer_id,))
             conn.commit()
         self.send_json({"ok": True})
+
+    def handle_update_session_code(self, path: str) -> None:
+        locator = session_locator_from_path(path)
+        new_code = normalize_session_code(read_json_body(self).get("sessionCode"))
+        if not new_code:
+            raise ValueError("Session code is required")
+        with connect() as conn:
+            session_id = resolve_session_id(conn, locator)
+            if session_id is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
+            if new_code != str(session_id):
+                validate_custom_session_code(new_code)
+            existing = conn.execute(
+                "SELECT id FROM sessions WHERE session_code = ? AND id != ?",
+                (new_code, session_id),
+            ).fetchone()
+            if existing is not None:
+                raise ValueError("Session code is already used")
+            conn.execute(
+                "UPDATE sessions SET session_code = ? WHERE id = ?",
+                (new_code, session_id),
+            )
+            conn.commit()
+        self.send_json({"ok": True, "sessionCode": new_code})
 
     def handle_export_candidates(self) -> None:
         fieldnames = [
@@ -863,9 +963,13 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         self.send_json({"ok": True, "imported": imported})
 
     def handle_save_employer_characteristics(self, path: str) -> None:
-        session_id = int(path.split("/")[3])
+        locator = session_locator_from_path(path)
         characteristics = validate_employer_characteristics(read_json_body(self))
         with connect() as conn:
+            session_id = resolve_session_id(conn, locator)
+            if session_id is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
             if conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is None:
                 self.send_json({"error": "Session not found"}, status=404)
                 return
@@ -892,7 +996,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         self.send_json({"ok": True, "characteristics": characteristics})
 
     def handle_save_response(self, path: str) -> None:
-        session_id = int(path.split("/")[3])
+        locator = session_locator_from_path(path)
         payload = read_json_body(self)
         required = [
             "candidateId",
@@ -942,6 +1046,10 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         )
 
         with connect() as conn:
+            session_id = resolve_session_id(conn, locator)
+            if session_id is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
             conn.execute(
                 "UPDATE sessions SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP) WHERE id = ?",
                 (session_id,),
@@ -996,6 +1104,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 """
                 SELECT
                   s.id AS session_id,
+                  s.session_code,
                   e.id AS employer_id,
                   e.name AS employer_name,
                   e.business_name,
@@ -1039,6 +1148,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         ]
         fieldnames = [
             "session_id",
+            "session_code",
             "employer_id",
             "employer_name",
             "business_name",
@@ -1066,6 +1176,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 """
                 SELECT
                   s.id AS session_id,
+                  s.session_code,
                   e.id AS employer_id,
                   e.name AS employer_name,
                   e.business_name,
@@ -1115,6 +1226,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         output = io.StringIO()
         fieldnames = [key for key in rows[0].keys()] if rows else [
             "session_id",
+            "session_code",
             "employer_id",
             "employer_name",
             "business_name",

@@ -86,10 +86,14 @@ REASON_OPTIONS = [
     ("yes", "Education fits the role", 2),
     ("yes", "Skills are suitable for the role", 3),
     ("yes", "Expected productivity is high", 4),
+    ("yes", "Impressive productivity task performance", 5),
+    ("yes", "Additional detail suggests good fit", 6),
     ("no", "Insufficient relevant experience", 1),
     ("no", "Education does not fit the role", 2),
     ("no", "Skills look too limited", 3),
     ("no", "Expected productivity is too low", 4),
+    ("no", "Disappointing productivity task performance", 5),
+    ("no", "Additional detail suggests poor fit", 6),
 ]
 
 

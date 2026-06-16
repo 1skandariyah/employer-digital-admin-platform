@@ -44,15 +44,21 @@ def build_flow(
     """
     if treatment_arm == TRANSPARENT:
         info_type = reveal_type
+        definition_steps = []
+        if info_type == "productivity":
+            definition_steps.append(
+                FlowStep(
+                    kind="transparent_productivity_definition",
+                    stage=STAGE_TRANSPARENT,
+                    show_productivity=True,
+                    info_type=info_type,
+                )
+            )
         return [
             FlowStep(kind="transparent_intro"),
             FlowStep(kind="employer_characteristics"),
-            FlowStep(
-                kind="transparent_productivity_definition",
-                stage=STAGE_TRANSPARENT,
-                show_productivity=(info_type == "productivity"),
-                info_type=info_type,
-            ),
+            FlowStep(kind="candidate_review_intro"),
+            *definition_steps,
             *[
                 FlowStep(
                     kind="candidate",
@@ -73,6 +79,7 @@ def build_flow(
         return [
             FlowStep(kind="hidden_intro"),
             FlowStep(kind="employer_characteristics"),
+            FlowStep(kind="candidate_review_intro"),
             *[
                 FlowStep(
                     kind="candidate",

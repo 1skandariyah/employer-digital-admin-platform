@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS candidate_set_members (
 
 CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_code TEXT UNIQUE,
   employer_id INTEGER NOT NULL REFERENCES employers(id),
   enumerator_id INTEGER NOT NULL REFERENCES users(id),
   treatment_arm TEXT NOT NULL CHECK (treatment_arm IN ('transparent', 'hidden')),

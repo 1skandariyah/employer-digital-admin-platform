@@ -19,7 +19,8 @@ class ExperimentFlowTests(unittest.TestCase):
 
         self.assertEqual(flow[0].kind, "transparent_intro")
         self.assertEqual(flow[1].kind, "employer_characteristics")
-        self.assertEqual(flow[2].kind, "transparent_productivity_definition")
+        self.assertEqual(flow[2].kind, "candidate_review_intro")
+        self.assertEqual(flow[3].kind, "transparent_productivity_definition")
         self.assertEqual([step.candidate_id for step in candidate_steps], [10, 11])
         self.assertEqual({step.stage for step in candidate_steps}, {"transparent"})
         self.assertTrue(all(step.show_productivity for step in candidate_steps))
@@ -33,7 +34,8 @@ class ExperimentFlowTests(unittest.TestCase):
 
         self.assertEqual(flow[0].kind, "hidden_intro")
         self.assertEqual(flow[1].kind, "employer_characteristics")
-        self.assertEqual(flow[5].kind, "hidden_reveal_productivity_definition")
+        self.assertEqual(flow[2].kind, "candidate_review_intro")
+        self.assertEqual(flow[6].kind, "hidden_reveal_productivity_definition")
         self.assertEqual([step.candidate_id for step in pre], [10, 11, 12])
         self.assertEqual([step.candidate_id for step in post], [12, 10, 11])
         self.assertCountEqual([step.candidate_id for step in pre], [step.candidate_id for step in post])
@@ -53,8 +55,22 @@ class ExperimentFlowTests(unittest.TestCase):
         flow = build_flow("transparent", [10, 11], "placebo")
         candidate_steps = [step for step in flow if step.kind == "candidate"]
 
+        self.assertEqual(flow[0].kind, "transparent_intro")
+        self.assertEqual(flow[1].kind, "employer_characteristics")
+        self.assertEqual(flow[2].kind, "candidate_review_intro")
+        self.assertEqual(flow[3].kind, "candidate")
+        self.assertNotIn(
+            "transparent_productivity_definition",
+            [step.kind for step in flow],
+        )
         self.assertTrue(all(not step.show_productivity for step in candidate_steps))
         self.assertEqual({step.info_type for step in candidate_steps}, {"placebo"})
+
+    def test_hidden_placebo_keeps_neutral_transition_before_second_review(self):
+        flow = build_flow("hidden", [10, 11], "placebo", [11, 10])
+
+        self.assertEqual(flow[5].kind, "hidden_reveal_productivity_definition")
+        self.assertEqual(flow[5].info_type, "placebo")
 
     def test_hidden_resume_preserves_reveal_instruction_page(self):
         flow = build_flow("hidden", [10, 11], "productivity")
@@ -79,10 +95,9 @@ class ExperimentFlowTests(unittest.TestCase):
 
         self.assertEqual(
             transparent[transparent_index].kind,
-            "transparent_productivity_definition",
+            "candidate_review_intro",
         )
-        self.assertEqual(hidden[hidden_index].kind, "candidate")
-        self.assertEqual(hidden[hidden_index].stage, "pre")
+        self.assertEqual(hidden[hidden_index].kind, "candidate_review_intro")
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@
           <form id="respondent-entry-form">
             <label>
               Session code
-              <input name="sessionId" inputmode="numeric" required placeholder="Example: 12">
+              <input name="sessionId" required placeholder="Example: PILOT-A1">
             </label>
             <button type="submit">Start</button>
             <p id="respondent-entry-status" class="muted"></p>
@@ -50,6 +50,10 @@
             <label>
               Employer name
               <input name="employerName" required placeholder="Respondent name">
+            </label>
+            <label>
+              Session code
+              <input name="sessionCode" placeholder="Optional, e.g. PILOT-A1">
             </label>
             <label>
               Business name
@@ -186,6 +190,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=36"></script>
+    <script src="/app.js?v=44"></script>
   </body>
 </html>

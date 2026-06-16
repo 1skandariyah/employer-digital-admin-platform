@@ -36,6 +36,21 @@ const BENCHMARK_RANGES = {
   },
 };
 
+const CONDITIONAL_REASON_LABELS = {
+  productivity: {
+    yes: "Impressive productivity task performance",
+    no: "Disappointing productivity task performance",
+  },
+  placebo: {
+    yes: "Additional detail suggests good fit",
+    no: "Additional detail suggests poor fit",
+  },
+};
+
+const CONDITIONAL_REASON_LABEL_SET = new Set(
+  Object.values(CONDITIONAL_REASON_LABELS).flatMap((labels) => Object.values(labels))
+);
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -82,8 +97,12 @@ function showLanding() {
   respondent.classList.add("hidden");
 }
 
-function sessionUrl(sessionId) {
-  return `${location.origin}${location.pathname}?session=${sessionId}`;
+function sessionLocator(session) {
+  return session.session_code || String(session.id);
+}
+
+function sessionUrl(session) {
+  return `${location.origin}${location.pathname}?session=${encodeURIComponent(sessionLocator(session))}`;
 }
 
 async function loadSessions() {
@@ -106,20 +125,39 @@ async function loadSessions() {
           ${session.candidate_count}/${session.requested_candidate_count} candidates
         </p>
         <p class="meta">
-          Session code: ${session.id} -
-          <a href="${sessionUrl(session.id)}" target="_blank" rel="noreferrer">Respondent link</a>
+          Session code: <strong>${sessionLocator(session)}</strong> -
+          <a href="${sessionUrl(session)}" target="_blank" rel="noreferrer">Respondent link</a>
         </p>
         <span class="status">${session.status} - ${formatStatus(session)}</span>
       </div>
       <div class="session-actions">
+        <button class="secondary rename-session-code" type="button">Rename code</button>
         <button class="secondary delete-session" type="button">Delete session</button>
         <button class="open-session" type="button">Open session</button>
       </div>
     `;
     row.querySelector(".open-session").addEventListener("click", () => openSession(session.id, { enumeratorControls: true }));
+    row.querySelector(".rename-session-code").addEventListener("click", () => renameSessionCode(session));
     row.querySelector(".delete-session").addEventListener("click", () => deleteSession(session));
     sessionList.append(row);
   });
+}
+
+async function renameSessionCode(session) {
+  const currentCode = sessionLocator(session);
+  const newCode = window.prompt("Enter new session code", currentCode);
+  if (newCode === null) {
+    return;
+  }
+  const trimmed = newCode.trim();
+  if (!trimmed || trimmed === currentCode) {
+    return;
+  }
+  await api(`/api/session/${encodeURIComponent(session.id)}/code`, {
+    method: "POST",
+    body: JSON.stringify({ sessionCode: trimmed }),
+  });
+  await loadSessions();
 }
 
 async function deleteSession(session) {
@@ -172,6 +210,11 @@ function renderStep() {
     addEnumeratorDashboardButton();
     return;
   }
+  if (step.kind === "candidate_review_intro") {
+    renderCandidateReviewIntro();
+    addEnumeratorDashboardButton();
+    return;
+  }
   if (step.kind === "transparent_productivity_definition") {
     renderInformationDefinition("transparent", step.info_type);
     addEnumeratorDashboardButton();
@@ -198,6 +241,10 @@ function previousStep() {
   }
   const currentStep = state.session.flow[state.stepIndex];
   if (currentStep.kind === "hidden_reveal_productivity_definition") {
+    requestPasscode("Staff Passcode", async () => {
+      state.stepIndex -= 1;
+      renderStep();
+    });
     return;
   }
   state.stepIndex -= 1;
@@ -303,18 +350,7 @@ function addEnumeratorDashboardButton() {
 function renderEligibilityIntro(kind) {
   respondent.innerHTML = `
     <article class="text-page">
-      <h2>Candidate Profile Review</h2>
-      <p>
-        In this session, you will review a number of candidate profiles relevant to entry-level
-        social media management or related digital creative work. These profiles are constructed
-        based on real resumes submitted by participants in our talent pool.
-      </p>
-      <p>
-        Please review each candidate carefully and answer the follow-up questions based on your
-        genuine assessment. Your careful and honest assessment of each profile is important because
-        it will help identify candidates who best suit your social media and digital creative role
-        requirements.
-      </p>
+      <h2>Session Eligibility</h2>
       <p>
         Are you currently hiring or planning to hire someone for a social media admin, social media
         manager, or related digital creative position within the next 3 months?
@@ -353,6 +389,27 @@ function renderEligibilityIntro(kind) {
     }
     nextStep();
   });
+}
+
+function renderCandidateReviewIntro() {
+  respondent.innerHTML = `
+    <article class="text-page">
+      <h2>Candidate Profile Review</h2>
+      <p>
+        In this session, you will review a number of candidate profiles relevant to entry-level
+        social media management or related digital creative work. These profiles are constructed
+        based on real resumes submitted by participants in our talent pool.
+      </p>
+      <p>
+        Please review each candidate carefully and answer the follow-up questions based on your
+        genuine assessment. Your careful and honest assessment of each profile is important because
+        it will help identify candidates who <strong>best suit</strong> your social media and
+        digital creative role requirements.
+      </p>
+      ${navigationButtons("Continue")}
+    </article>
+  `;
+  attachNavigation(respondent);
 }
 
 function renderInformationDefinition(variant, infoType) {
@@ -526,16 +583,16 @@ function renderEmployerCharacteristics() {
           </section>
 
           <section class="characteristics-section">
-            <h3>E. Participation motivation</h3>
+            <h3>D. Participation motivation</h3>
             <fieldset class="compact-fieldset">
-              <legend>E1. Importance of participation fee</legend>
+              <legend>D1. Importance of participation fee</legend>
               <p class="compact-prompt">How important is the participation fee in motivating you to participate in this session?</p>
               <div class="importance-scale">
                 ${radioOptions("participationFeeImportance", [["1", "1 Not important"], ["2", "2 Slightly"], ["3", "3 Moderately"], ["4", "4 Important"], ["5", "5 Very important"]])}
               </div>
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>E2. Importance of candidate-matching benefit</legend>
+              <legend>D2. Importance of candidate-matching benefit</legend>
               <p class="compact-prompt">How important is the possibility of being matched with potential candidates in motivating you to participate in this session?</p>
               <div class="importance-scale">
                 ${radioOptions("matchingBenefitImportance", [["1", "1 Not important"], ["2", "2 Slightly"], ["3", "3 Moderately"], ["4", "4 Important"], ["5", "5 Very important"]])}
@@ -656,26 +713,21 @@ async function submitEmployerCharacteristics(event) {
 function renderPlaceboDefinition(variant) {
   const isReveal = variant === "hidden_reveal";
   const title = isReveal
-    ? "Additional Candidate Information"
-    : "Candidate Information Note";
+    ? "Candidate Profile Review"
+    : "Candidate Profile Review";
   const opening = isReveal
     ? `
       <p>Thank you. You have now completed the first review of all candidate profiles.</p>
       <p>
-        In the next section, we will provide one additional personal detail for each candidate.
-      </p>
-      <p>
-        Please review the same candidate profiles again with this additional information. As before,
+        In the next section, you will review the same candidate profiles again. This time, each
+        profile will include one additional personal detail about the candidate. As before, please
         answer the follow-up questions based on your genuine assessment.
       </p>
     `
     : `
       <p>
-        Candidate profiles are accompanied by one additional personal detail.
-      </p>
-      <p>
-        This detail is included as supplementary background information and is not a measure of
-        candidate productivity or task performance.
+        Please review each candidate profile carefully and answer the follow-up questions based on
+        your genuine assessment.
       </p>
     `;
 
@@ -683,10 +735,7 @@ function renderPlaceboDefinition(variant) {
     <article class="text-page">
       <h2>${title}</h2>
       ${opening}
-      <p>
-        Please use this information only as an additional reference when reviewing each candidate.
-      </p>
-      ${navigationButtons("Continue", { disablePrevious: isReveal })}
+      ${navigationButtons("Continue")}
     </article>
   `;
   attachNavigation(respondent);
@@ -791,7 +840,7 @@ function renderProductivityDefinition(variant) {
         These screenshots are examples only. Candidate-specific values will be shown on each
         candidate profile.
       </p>
-      ${navigationButtons("Continue", { disablePrevious: isReveal })}
+      ${navigationButtons("Continue")}
     </article>
   `;
   attachNavigation(respondent);
@@ -889,6 +938,7 @@ function renderCandidate(step) {
   }
 
   const form = card.querySelector(".response-form");
+  form.dataset.infoType = step.info_type || "";
   const reasonOptions = card.querySelector(".reason-options");
   const rankedReasons = card.querySelector(".ranked-reasons");
 
@@ -1030,7 +1080,16 @@ function renderReasons(form, reasonOptions, rankedReasons, response) {
   const savedScores = canUseSavedReasons && response.reason_scores_json
     ? JSON.parse(response.reason_scores_json)
     : {};
-  const reasons = state.session.reasons.filter((reason) => reason.applies_to === hireInterest);
+  const activeConditionalLabel = CONDITIONAL_REASON_LABELS[form.dataset.infoType]?.[hireInterest];
+  const reasons = state.session.reasons.filter((reason) => {
+    if (reason.applies_to !== hireInterest) {
+      return false;
+    }
+    if (!CONDITIONAL_REASON_LABEL_SET.has(reason.label)) {
+      return true;
+    }
+    return reason.label === activeConditionalLabel;
+  });
 
   reasons.forEach((reason) => {
     const line = document.createElement("label");
