@@ -18,7 +18,7 @@ class CandidateImportTests(unittest.TestCase):
             "reach_indicator": "Median reach",
             "interaction_indicator": "Above median interaction",
             "benchmark": "Talent-pool median score: 50",
-            "hobby": "Photography",
+            "additional_information": "Likes watching comedy movies",
         }
 
         code, pseudonym, baseline_json, productivity_json, placebo_json = candidate_row_to_payload(row)
@@ -31,7 +31,7 @@ class CandidateImportTests(unittest.TestCase):
         self.assertIn("gpa", baseline)
         self.assertNotIn("place_of_birth", baseline)
         self.assertEqual(productivity["reach_indicator"], "Median reach")
-        self.assertEqual(placebo["hobby"], "Photography")
+        self.assertEqual(placebo["additional_information"], "Likes watching comedy movies")
 
 
 if __name__ == "__main__":

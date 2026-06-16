@@ -46,6 +46,7 @@ def build_flow(
         info_type = reveal_type
         return [
             FlowStep(kind="transparent_intro"),
+            FlowStep(kind="employer_characteristics"),
             FlowStep(
                 kind="transparent_productivity_definition",
                 stage=STAGE_TRANSPARENT,
@@ -71,6 +72,7 @@ def build_flow(
         post_order = post_candidate_order or candidate_order
         return [
             FlowStep(kind="hidden_intro"),
+            FlowStep(kind="employer_characteristics"),
             *[
                 FlowStep(
                     kind="candidate",
@@ -118,9 +120,19 @@ def next_unanswered_candidate_step(
     return len(flow) - 1
 
 
-def next_resume_step(flow: list[FlowStep], answered_keys: set[tuple[int, str]]) -> int:
+def next_resume_step(
+    flow: list[FlowStep],
+    answered_keys: set[tuple[int, str]],
+    characteristics_completed: bool = False,
+) -> int:
     """Find the correct resume point while preserving required instruction screens."""
+    characteristics_index = next(
+        (index for index, step in enumerate(flow) if step.kind == "employer_characteristics"),
+        None,
+    )
     if not answered_keys:
+        if characteristics_completed and characteristics_index is not None:
+            return min(characteristics_index + 1, len(flow) - 1)
         return 0
 
     first_unanswered = next_unanswered_candidate_step(flow, answered_keys)

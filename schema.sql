@@ -80,10 +80,18 @@ CREATE TABLE IF NOT EXISTS responses (
   hire_interest TEXT NOT NULL CHECK (hire_interest IN ('yes', 'no')),
   selected_reasons_json TEXT NOT NULL,
   ranked_reasons_json TEXT NOT NULL,
+  reason_scores_json TEXT NOT NULL DEFAULT '{}',
   conditional_wage_offer INTEGER NOT NULL,
   started_at TEXT,
   submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(session_id, candidate_id, stage)
+);
+
+CREATE TABLE IF NOT EXISTS employer_characteristics (
+  session_id INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+  response_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS randomization_logs (

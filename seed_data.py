@@ -55,6 +55,43 @@ PRODUCTIVITY_BY_CODE = {
     },
 }
 
+SKILLS_BY_CODE = {
+    "C-101": "Canva, caption writing, social media analytics",
+    "C-102": "Content scheduling, product photography, Microsoft Excel / Google Sheets",
+    "C-103": "Content writing, Meta Business Suite, content planning",
+    "C-104": "CapCut, short-form video editing, trend research",
+    "C-105": "Canva, product photography, caption writing",
+    "C-106": "Content planning, Canva, customer message handling",
+    "C-107": "CapCut, basic graphic design, trend research",
+    "C-108": "Meta Business Suite, social media analytics, content scheduling",
+    "C-109": "WhatsApp Business, customer message handling, Canva",
+    "C-110": "CapCut, short-form video editing, product photography",
+}
+
+ADDITIONAL_INFORMATION_BY_CODE = {
+    "C-101": "Has a pet cat",
+    "C-102": "Likes watching action movies",
+    "C-103": "Enjoys listening to pop music",
+    "C-104": "Has a pet bird",
+    "C-105": "Likes watching drama movies",
+    "C-106": "Has a pet fish",
+    "C-107": "Likes watching comedy movies",
+    "C-108": "Enjoys listening to K-pop music",
+    "C-109": "Enjoys listening to rock music",
+    "C-110": "Likes watching horror movies",
+}
+
+REASON_OPTIONS = [
+    ("yes", "Relevant experience is sufficient", 1),
+    ("yes", "Education fits the role", 2),
+    ("yes", "Skills are suitable for the role", 3),
+    ("yes", "Expected productivity is high", 4),
+    ("no", "Insufficient relevant experience", 1),
+    ("no", "Education does not fit the role", 2),
+    ("no", "Skills look too limited", 3),
+    ("no", "Expected productivity is too low", 4),
+]
+
 
 def seed_database(conn: sqlite3.Connection) -> None:
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -81,11 +118,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Vocational high school, multimedia major",
                 "average_score": 67.7,
                 "relevant_experience": "0 years 6 months",
-                "skills": "Canva, CapCut, Instagram captions, basic analytics",
+                "skills": SKILLS_BY_CODE["C-101"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-101"],
             "placebo": {
-                "hobby": "Cooking and trying new recipes",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-101"],
             },
         },
         {
@@ -98,11 +135,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Diploma, information systems",
                 "gpa": 2.24,
                 "relevant_experience": "1 year 0 months",
-                "skills": "Content scheduling, photography, spreadsheet reporting",
+                "skills": SKILLS_BY_CODE["C-102"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-102"],
             "placebo": {
-                "hobby": "Playing futsal on weekends",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-102"],
             },
         },
         {
@@ -115,11 +152,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Bachelor's degree, communication",
                 "gpa": 3.36,
                 "relevant_experience": "2 years 0 months",
-                "skills": "Copywriting, Meta Business Suite, simple design briefs",
+                "skills": SKILLS_BY_CODE["C-103"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-103"],
             "placebo": {
-                "hobby": "Reading novels and journaling",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-103"],
             },
         },
         {
@@ -132,11 +169,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Senior high school",
                 "average_score": 90.0,
                 "relevant_experience": "0 years 6 months",
-                "skills": "Short-form video, basic photo editing, trend monitoring",
+                "skills": SKILLS_BY_CODE["C-104"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-104"],
             "placebo": {
-                "hobby": "Cycling and short-form video editing",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-104"],
             },
         },
         {
@@ -149,11 +186,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Vocational high school, visual communication design",
                 "average_score": 77.7,
                 "relevant_experience": "1 year 2 months",
-                "skills": "Canva, Instagram Reels, product photography, caption writing",
+                "skills": SKILLS_BY_CODE["C-105"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-105"],
             "placebo": {
-                "hobby": "Baking and food photography",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-105"],
             },
         },
         {
@@ -166,11 +203,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Diploma, communication",
                 "gpa": 0.3,
                 "relevant_experience": "1 year 6 months",
-                "skills": "Content calendar planning, Canva, basic video editing, customer replies",
+                "skills": SKILLS_BY_CODE["C-106"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-106"],
             "placebo": {
-                "hobby": "Playing guitar",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-106"],
             },
         },
         {
@@ -183,11 +220,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Senior high school",
                 "average_score": 84.2,
                 "relevant_experience": "0 years 8 months",
-                "skills": "TikTok content, CapCut, simple graphic design, trend monitoring",
+                "skills": SKILLS_BY_CODE["C-107"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-107"],
             "placebo": {
-                "hobby": "Traditional dance",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-107"],
             },
         },
         {
@@ -200,11 +237,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Bachelor's degree, management",
                 "gpa": 3.46,
                 "relevant_experience": "2 years 0 months",
-                "skills": "Meta Business Suite, spreadsheet reporting, copywriting, campaign scheduling",
+                "skills": SKILLS_BY_CODE["C-108"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-108"],
             "placebo": {
-                "hobby": "Badminton",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-108"],
             },
         },
         {
@@ -217,11 +254,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Vocational high school, office administration",
                 "average_score": 82.7,
                 "relevant_experience": "1 year 0 months",
-                "skills": "Instagram admin, WhatsApp Business replies, Canva, basic analytics",
+                "skills": SKILLS_BY_CODE["C-109"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-109"],
             "placebo": {
-                "hobby": "Reading web novels",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-109"],
             },
         },
         {
@@ -234,11 +271,11 @@ def seed_database(conn: sqlite3.Connection) -> None:
                 "education": "Diploma, multimedia",
                 "gpa": 3.83,
                 "relevant_experience": "1 year 4 months",
-                "skills": "Short-form video editing, product photos, content scheduling, Canva",
+                "skills": SKILLS_BY_CODE["C-110"],
             },
             "productivity": PRODUCTIVITY_BY_CODE["C-110"],
             "placebo": {
-                "hobby": "Fishing",
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE["C-110"],
             },
         },
     ]
@@ -269,18 +306,8 @@ def seed_database(conn: sqlite3.Connection) -> None:
         [(set_id, candidate_id, idx) for idx, candidate_id in enumerate(candidate_ids, start=1)],
     )
 
-    reasons = [
-        ("yes", "Relevant social media experience", 1),
-        ("yes", "Strong creative skills", 2),
-        ("yes", "Education fits the role", 3),
-        ("yes", "Looks easy to train", 4),
-        ("no", "Insufficient relevant experience", 1),
-        ("no", "Education does not fit the role", 2),
-        ("no", "Skills look too limited", 3),
-        ("no", "Expected productivity is too low", 4),
-    ]
     conn.executemany(
         "INSERT INTO reason_options (applies_to, label, sort_order) VALUES (?, ?, ?)",
-        reasons,
+        REASON_OPTIONS,
     )
     conn.commit()

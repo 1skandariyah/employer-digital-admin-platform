@@ -14,7 +14,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from experiment import build_flow, next_resume_step, randomized_candidate_order
-from seed_data import PRODUCTIVITY_BY_CODE, seed_database
+from seed_data import (
+    ADDITIONAL_INFORMATION_BY_CODE,
+    PRODUCTIVITY_BY_CODE,
+    REASON_OPTIONS,
+    seed_database,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -107,27 +112,15 @@ def normalize_baseline(code: str, baseline: dict) -> dict:
 def baseline_for_display(code: str, baseline: dict) -> dict:
     normalized = normalize_baseline(code, dict(baseline))
     display = {}
-    education = str(normalized.get("education", ""))
-    if "average_score" in normalized:
-        education = f"{education} (average score = {format_compact_number(normalized['average_score'])})"
-    elif "gpa" in normalized:
-        education = f"{education} (GPA = {format_compact_number(normalized['gpa'])})"
 
     for key, value in normalized.items():
         if key == "date_of_birth":
             display["age"] = age_from_date_of_birth(str(value))
             continue
-        if key in {"average_score", "gpa"}:
-            continue
-        if key == "education":
-            display[key] = education
+        if key in {"current_address", "average_score", "gpa"}:
             continue
         display[key] = value
     return display
-
-
-def format_compact_number(value: float) -> str:
-    return f"{float(value):.2f}".rstrip("0").rstrip(".")
 
 
 def parse_csv_body(handler: SimpleHTTPRequestHandler) -> list[dict]:
@@ -163,7 +156,9 @@ def candidate_row_to_payload(row: dict) -> tuple[str, str, str, str, str]:
         "benchmark": (row.get("benchmark") or "").strip(),
     }
     placebo = {
-        "hobby": (row.get("hobby") or "").strip(),
+        "additional_information": (
+            row.get("additional_information") or row.get("hobby") or ""
+        ).strip(),
     }
     return code, pseudonym, json.dumps(baseline), json.dumps(productivity), json.dumps(placebo)
 
@@ -209,17 +204,27 @@ def migrate_database(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE session_candidates ADD COLUMN post_order_index INTEGER")
         conn.execute("UPDATE session_candidates SET post_order_index = order_index WHERE post_order_index IS NULL")
 
+    response_columns = {row["name"] for row in conn.execute("PRAGMA table_info(responses)")}
+    if "reason_scores_json" not in response_columns:
+        conn.execute(
+            "ALTER TABLE responses ADD COLUMN reason_scores_json TEXT NOT NULL DEFAULT '{}'"
+        )
+
+    for applies_to, label, sort_order in REASON_OPTIONS:
+        conn.execute(
+            """
+            UPDATE reason_options
+            SET label = ?
+            WHERE applies_to = ? AND sort_order = ?
+            """,
+            (label, applies_to, sort_order),
+        )
+
     experience_by_code = {
         "C-101": "0 years 6 months",
         "C-102": "1 year 0 months",
         "C-103": "2 years 0 months",
         "C-104": "0 years 6 months",
-    }
-    placebo_by_code = {
-        "C-101": {"hobby": "Cooking and trying new recipes"},
-        "C-102": {"hobby": "Playing futsal on weekends"},
-        "C-103": {"hobby": "Reading novels and journaling"},
-        "C-104": {"hobby": "Cycling and short-form video editing"},
     }
     for row in conn.execute("SELECT code, baseline_json, productivity_json FROM candidates"):
         baseline = json.loads(row["baseline_json"])
@@ -229,9 +234,12 @@ def migrate_database(conn: sqlite3.Connection) -> None:
             "UPDATE candidates SET baseline_json = ? WHERE code = ?",
             (json.dumps(baseline), row["code"]),
         )
-        placebo = placebo_by_code.get(row["code"], {"hobby": "Hobby information not yet configured"})
+        additional_information = ADDITIONAL_INFORMATION_BY_CODE.get(
+            row["code"], "Additional information not yet configured"
+        )
+        placebo = {"additional_information": additional_information}
         conn.execute(
-            "UPDATE candidates SET placebo_json = COALESCE(placebo_json, ?) WHERE code = ?",
+            "UPDATE candidates SET placebo_json = ? WHERE code = ?",
             (json.dumps(placebo), row["code"]),
         )
         productivity = json.loads(row["productivity_json"] or "{}")
@@ -292,6 +300,151 @@ def read_json_body(handler: SimpleHTTPRequestHandler) -> dict:
     return json.loads(handler.rfile.read(length).decode("utf-8"))
 
 
+CHARACTERISTIC_CHOICES = {
+    "gender": {"male", "female", "prefer_not_to_say"},
+    "education": {
+        "primary_or_below",
+        "junior_secondary",
+        "senior_or_vocational",
+        "diploma",
+        "bachelor",
+        "master_or_above",
+    },
+    "business_role": {"owner", "co_owner", "manager", "hr_recruitment", "other"},
+    "business_sector": {
+        "manufacturing",
+        "accommodation_food",
+        "wholesale_retail",
+        "personal_services",
+        "other",
+    },
+    "workers": {"1_4", "5_19", "20_99", "100_plus"},
+    "annual_revenue": {
+        "less_300m",
+        "300m_to_2_5b",
+        "2_5b_to_50b",
+        "50b_plus",
+        "prefer_not_to_say",
+    },
+    "active_social_media": {"yes", "no"},
+    "previous_digital_hiring": {"yes", "no"},
+    "work_arrangement": {
+        "full_time",
+        "part_time",
+        "freelancer",
+        "family_informal",
+        "other",
+    },
+}
+
+PLATFORM_CHOICES = {
+    "instagram",
+    "tiktok",
+    "facebook",
+    "whatsapp_business",
+    "youtube",
+    "x_twitter",
+    "other",
+}
+
+
+def validate_employer_characteristics(payload: dict) -> dict:
+    required = [
+        "gender",
+        "birthMonth",
+        "birthYear",
+        "education",
+        "businessRole",
+        "businessSector",
+        "establishedYear",
+        "workers",
+        "annualRevenue",
+        "city",
+        "province",
+        "activeSocialMedia",
+        "previousDigitalHiring",
+        "workArrangement",
+        "participationFeeImportance",
+        "matchingBenefitImportance",
+    ]
+    missing = [key for key in required if payload.get(key) in (None, "")]
+    if missing:
+        raise ValueError(f"Missing required characteristics: {', '.join(missing)}")
+
+    field_map = {
+        "gender": ("gender", payload["gender"]),
+        "education": ("education", payload["education"]),
+        "business_role": ("businessRole", payload["businessRole"]),
+        "business_sector": ("businessSector", payload["businessSector"]),
+        "workers": ("workers", payload["workers"]),
+        "annual_revenue": ("annualRevenue", payload["annualRevenue"]),
+        "active_social_media": ("activeSocialMedia", payload["activeSocialMedia"]),
+        "previous_digital_hiring": ("previousDigitalHiring", payload["previousDigitalHiring"]),
+        "work_arrangement": ("workArrangement", payload["workArrangement"]),
+    }
+    for choice_key, (payload_key, value) in field_map.items():
+        if value not in CHARACTERISTIC_CHOICES[choice_key]:
+            raise ValueError(f"Invalid value for {payload_key}")
+
+    current_year = date.today().year
+    birth_month = int(payload["birthMonth"])
+    birth_year = int(payload["birthYear"])
+    established_year = int(payload["establishedYear"])
+    if not 1 <= birth_month <= 12:
+        raise ValueError("Birth month must be between 1 and 12")
+    if not 1900 <= birth_year <= current_year - 15:
+        raise ValueError("Birth year is outside the accepted range")
+    if not 1800 <= established_year <= current_year:
+        raise ValueError("Business establishment year is outside the accepted range")
+
+    platforms = payload.get("platforms") or []
+    if not isinstance(platforms, list) or any(item not in PLATFORM_CHOICES for item in platforms):
+        raise ValueError("Invalid social media platform selection")
+    if payload["activeSocialMedia"] == "yes" and not platforms:
+        raise ValueError("Select at least one platform currently used")
+    if payload["activeSocialMedia"] == "no":
+        platforms = []
+
+    conditional_other_fields = [
+        (payload["businessRole"] == "other", "businessRoleOther"),
+        (payload["businessSector"] == "other", "businessSectorOther"),
+        ("other" in platforms, "platformOther"),
+        (payload["workArrangement"] == "other", "workArrangementOther"),
+    ]
+    for required_if_selected, key in conditional_other_fields:
+        if required_if_selected and not str(payload.get(key, "")).strip():
+            raise ValueError(f"Please specify {key}")
+
+    fee_importance = int(payload["participationFeeImportance"])
+    match_importance = int(payload["matchingBenefitImportance"])
+    if fee_importance not in range(1, 6) or match_importance not in range(1, 6):
+        raise ValueError("Importance ratings must be between 1 and 5")
+
+    return {
+        "gender": payload["gender"],
+        "birth_month": birth_month,
+        "birth_year": birth_year,
+        "education": payload["education"],
+        "business_role": payload["businessRole"],
+        "business_role_other": str(payload.get("businessRoleOther", "")).strip(),
+        "business_sector": payload["businessSector"],
+        "business_sector_other": str(payload.get("businessSectorOther", "")).strip(),
+        "established_year": established_year,
+        "workers": payload["workers"],
+        "annual_revenue": payload["annualRevenue"],
+        "city": str(payload["city"]).strip(),
+        "province": str(payload["province"]).strip(),
+        "active_social_media": payload["activeSocialMedia"],
+        "platforms": platforms,
+        "platform_other": str(payload.get("platformOther", "")).strip(),
+        "previous_digital_hiring": payload["previousDigitalHiring"],
+        "work_arrangement": payload["workArrangement"],
+        "work_arrangement_other": str(payload.get("workArrangementOther", "")).strip(),
+        "participation_fee_importance": fee_importance,
+        "matching_benefit_importance": match_importance,
+    }
+
+
 class ExperimentHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -334,6 +487,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 self.handle_export_candidates()
             elif parsed.path == "/api/export/responses.csv":
                 self.handle_export_responses()
+            elif parsed.path == "/api/export/employer-characteristics.csv":
+                self.handle_export_employer_characteristics()
             else:
                 super().do_GET()
         except Exception as exc:
@@ -348,6 +503,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 self.handle_import_candidates()
             elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/response"):
                 self.handle_save_response(parsed.path)
+            elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/characteristics"):
+                self.handle_save_employer_characteristics(parsed.path)
             else:
                 self.send_json({"error": "Unknown endpoint"}, status=404)
         except ValueError as exc:
@@ -454,6 +611,15 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 row_to_dict(row)
                 for row in conn.execute("SELECT * FROM responses WHERE session_id = ?", (session_id,))
             ]
+            characteristics_row = conn.execute(
+                "SELECT response_json FROM employer_characteristics WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            characteristics = (
+                json.loads(characteristics_row["response_json"])
+                if characteristics_row is not None
+                else None
+            )
             answered = {(response["candidate_id"], response["stage"]) for response in responses}
             candidate_order = [candidate["id"] for candidate in candidates]
             post_candidate_order = [
@@ -468,13 +634,18 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             )
             flow = [step.__dict__ for step in flow_steps]
 
-            resume_step_index = next_resume_step(flow_steps, answered)
+            resume_step_index = next_resume_step(
+                flow_steps,
+                answered,
+                characteristics_completed=characteristics is not None,
+            )
 
             payload = {
                 "session": row_to_dict(session),
                 "candidates": candidates,
                 "reasons": [row_to_dict(row) for row in conn.execute("SELECT * FROM reason_options WHERE active = 1 ORDER BY applies_to, sort_order, id")],
                 "responses": responses,
+                "characteristics": characteristics,
                 "flow": flow,
                 "resumeStepIndex": resume_step_index,
             }
@@ -604,7 +775,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "reach_indicator",
             "interaction_indicator",
             "benchmark",
-            "hobby",
+            "additional_information",
         ]
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -629,7 +800,9 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                         "reach_indicator": productivity.get("reach_indicator", ""),
                         "interaction_indicator": productivity.get("interaction_indicator", ""),
                         "benchmark": productivity.get("benchmark", ""),
-                        "hobby": placebo.get("hobby", ""),
+                        "additional_information": placebo.get(
+                            "additional_information", placebo.get("hobby", "")
+                        ),
                     }
                 )
         self.send_csv("candidates.csv", output.getvalue())
@@ -689,13 +862,55 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             conn.commit()
         self.send_json({"ok": True, "imported": imported})
 
+    def handle_save_employer_characteristics(self, path: str) -> None:
+        session_id = int(path.split("/")[3])
+        characteristics = validate_employer_characteristics(read_json_body(self))
+        with connect() as conn:
+            if conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
+            conn.execute(
+                """
+                INSERT INTO employer_characteristics (session_id, response_json)
+                VALUES (?, ?)
+                ON CONFLICT(session_id)
+                DO UPDATE SET
+                  response_json = excluded.response_json,
+                  updated_at = CURRENT_TIMESTAMP
+                """,
+                (session_id, json.dumps(characteristics)),
+            )
+            conn.execute(
+                """
+                UPDATE sessions
+                SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP)
+                WHERE id = ?
+                """,
+                (session_id,),
+            )
+            conn.commit()
+        self.send_json({"ok": True, "characteristics": characteristics})
+
     def handle_save_response(self, path: str) -> None:
         session_id = int(path.split("/")[3])
         payload = read_json_body(self)
-        required = ["candidateId", "stage", "wageValue", "hireInterest", "selectedReasons", "rankedReasons", "conditionalWageOffer"]
+        required = [
+            "candidateId",
+            "stage",
+            "wageValue",
+            "hireInterest",
+            "selectedReasons",
+            "reasonScores",
+            "conditionalWageOffer",
+        ]
         missing = [key for key in required if payload.get(key) in (None, "")]
         if missing:
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+        for key in ("wageValue", "conditionalWageOffer"):
+            value = payload[key]
+            if isinstance(value, bool) or not str(value).isdigit():
+                raise ValueError("Salary responses must contain whole numbers only")
 
         wage = int(payload["wageValue"])
         conditional_wage = int(payload["conditionalWageOffer"])
@@ -706,6 +921,26 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         if not payload["selectedReasons"]:
             raise ValueError("Select at least one reason")
 
+        selected_reason_ids = [int(reason_id) for reason_id in payload["selectedReasons"]]
+        try:
+            reason_scores = {
+                int(reason_id): int(score)
+                for reason_id, score in payload["reasonScores"].items()
+            }
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError("Reason importance scores must be whole numbers") from exc
+        if set(reason_scores) != set(selected_reason_ids):
+            raise ValueError("Every selected reason must have an importance score")
+        if any(score < 0 or score > 100 for score in reason_scores.values()):
+            raise ValueError("Reason importance scores must be between 0 and 100")
+        selected_positions = {
+            reason_id: index for index, reason_id in enumerate(selected_reason_ids)
+        }
+        ranked_reasons = sorted(
+            selected_reason_ids,
+            key=lambda reason_id: (-reason_scores[reason_id], selected_positions[reason_id]),
+        )
+
         with connect() as conn:
             conn.execute(
                 "UPDATE sessions SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP) WHERE id = ?",
@@ -715,16 +950,17 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 """
                 INSERT INTO responses (
                   session_id, candidate_id, stage, wage_value, hire_interest,
-                  selected_reasons_json, ranked_reasons_json, conditional_wage_offer,
-                  started_at
+                  selected_reasons_json, ranked_reasons_json, reason_scores_json,
+                  conditional_wage_offer, started_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id, candidate_id, stage)
                 DO UPDATE SET
                   wage_value = excluded.wage_value,
                   hire_interest = excluded.hire_interest,
                   selected_reasons_json = excluded.selected_reasons_json,
                   ranked_reasons_json = excluded.ranked_reasons_json,
+                  reason_scores_json = excluded.reason_scores_json,
                   conditional_wage_offer = excluded.conditional_wage_offer,
                   submitted_at = CURRENT_TIMESTAMP
                 """,
@@ -734,8 +970,9 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                     payload["stage"],
                     wage,
                     payload["hireInterest"],
-                    json.dumps(payload["selectedReasons"]),
-                    json.dumps(payload["rankedReasons"]),
+                    json.dumps(selected_reason_ids),
+                    json.dumps(ranked_reasons),
+                    json.dumps(reason_scores),
                     conditional_wage,
                     payload.get("startedAt"),
                 ),
@@ -752,6 +989,76 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 )
             conn.commit()
         self.send_json({"ok": True})
+
+    def handle_export_employer_characteristics(self) -> None:
+        with connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                  s.id AS session_id,
+                  e.id AS employer_id,
+                  e.name AS employer_name,
+                  e.business_name,
+                  u.name AS enumerator_name,
+                  s.treatment_arm,
+                  s.reveal_type,
+                  s.mode,
+                  ec.response_json,
+                  ec.created_at AS characteristics_created_at,
+                  ec.updated_at AS characteristics_updated_at
+                FROM employer_characteristics ec
+                JOIN sessions s ON s.id = ec.session_id
+                JOIN employers e ON e.id = s.employer_id
+                JOIN users u ON u.id = s.enumerator_id
+                ORDER BY s.id
+                """
+            ).fetchall()
+
+        characteristic_fields = [
+            "gender",
+            "birth_month",
+            "birth_year",
+            "education",
+            "business_role",
+            "business_role_other",
+            "business_sector",
+            "business_sector_other",
+            "established_year",
+            "workers",
+            "annual_revenue",
+            "city",
+            "province",
+            "active_social_media",
+            "platforms",
+            "platform_other",
+            "previous_digital_hiring",
+            "work_arrangement",
+            "work_arrangement_other",
+            "participation_fee_importance",
+            "matching_benefit_importance",
+        ]
+        fieldnames = [
+            "session_id",
+            "employer_id",
+            "employer_name",
+            "business_name",
+            "enumerator_name",
+            "treatment_arm",
+            "reveal_type",
+            "mode",
+            *characteristic_fields,
+            "characteristics_created_at",
+            "characteristics_updated_at",
+        ]
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            item = row_to_dict(row)
+            characteristics = json.loads(item.pop("response_json"))
+            characteristics["platforms"] = json.dumps(characteristics.get("platforms", []))
+            writer.writerow({**item, **characteristics})
+        self.send_csv("employer-characteristics.csv", output.getvalue())
 
     def handle_export_responses(self) -> None:
         with connect() as conn:
@@ -778,11 +1085,12 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                   c.id AS candidate_id,
                   c.code AS candidate_code,
                   r.stage,
-                  r.wage_value,
+                  r.wage_value AS perceived_typical_monthly_pay,
                   r.hire_interest,
                   r.selected_reasons_json,
                   r.ranked_reasons_json,
-                  r.conditional_wage_offer,
+                  r.reason_scores_json AS reason_importance_scores_json,
+                  r.conditional_wage_offer AS hypothetical_monthly_salary_offer,
                   r.submitted_at,
                   s.created_at AS session_created_at,
                   s.completed_at AS session_completed_at
@@ -823,11 +1131,12 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "candidate_id",
             "candidate_code",
             "stage",
-            "wage_value",
+            "perceived_typical_monthly_pay",
             "hire_interest",
             "selected_reasons_json",
             "ranked_reasons_json",
-            "conditional_wage_offer",
+            "reason_importance_scores_json",
+            "hypothetical_monthly_salary_offer",
             "submitted_at",
             "session_created_at",
             "session_completed_at",

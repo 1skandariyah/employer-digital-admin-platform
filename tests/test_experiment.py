@@ -18,7 +18,8 @@ class ExperimentFlowTests(unittest.TestCase):
         candidate_steps = [step for step in flow if step.kind == "candidate"]
 
         self.assertEqual(flow[0].kind, "transparent_intro")
-        self.assertEqual(flow[1].kind, "transparent_productivity_definition")
+        self.assertEqual(flow[1].kind, "employer_characteristics")
+        self.assertEqual(flow[2].kind, "transparent_productivity_definition")
         self.assertEqual([step.candidate_id for step in candidate_steps], [10, 11])
         self.assertEqual({step.stage for step in candidate_steps}, {"transparent"})
         self.assertTrue(all(step.show_productivity for step in candidate_steps))
@@ -31,7 +32,8 @@ class ExperimentFlowTests(unittest.TestCase):
         post = [step for step in candidate_steps if step.stage == "post"]
 
         self.assertEqual(flow[0].kind, "hidden_intro")
-        self.assertEqual(flow[4].kind, "hidden_reveal_productivity_definition")
+        self.assertEqual(flow[1].kind, "employer_characteristics")
+        self.assertEqual(flow[5].kind, "hidden_reveal_productivity_definition")
         self.assertEqual([step.candidate_id for step in pre], [10, 11, 12])
         self.assertEqual([step.candidate_id for step in post], [12, 10, 11])
         self.assertCountEqual([step.candidate_id for step in pre], [step.candidate_id for step in post])
@@ -65,6 +67,22 @@ class ExperimentFlowTests(unittest.TestCase):
         flow = build_flow("transparent", [10, 11], "productivity")
 
         self.assertEqual(next_resume_step(flow, set()), 0)
+
+    def test_completed_characteristics_resumes_at_next_step(self):
+        transparent = build_flow("transparent", [10, 11], "productivity")
+        hidden = build_flow("hidden", [10, 11], "productivity")
+
+        transparent_index = next_resume_step(
+            transparent, set(), characteristics_completed=True
+        )
+        hidden_index = next_resume_step(hidden, set(), characteristics_completed=True)
+
+        self.assertEqual(
+            transparent[transparent_index].kind,
+            "transparent_productivity_definition",
+        )
+        self.assertEqual(hidden[hidden_index].kind, "candidate")
+        self.assertEqual(hidden[hidden_index].stage, "pre")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,21 @@ const candidateCsvInput = document.querySelector("#candidate-csv");
 const importCandidatesButton = document.querySelector("#import-candidates");
 const candidateImportStatus = document.querySelector("#candidate-import-status");
 
+const BENCHMARK_RANGES = {
+  reach_indicator: {
+    min: 320,
+    median: 950,
+    max: 4100,
+    unit: "accounts reached per post",
+  },
+  interaction_indicator: {
+    min: 12,
+    median: 54,
+    max: 280,
+    unit: "interactions per post",
+  },
+};
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -34,7 +49,11 @@ async function api(path, options = {}) {
 }
 
 function moneyToInteger(value) {
-  return Number(String(value).replace(/[^\d]/g, ""));
+  const normalized = String(value).trim();
+  if (!/^\d+$/.test(normalized)) {
+    return Number.NaN;
+  }
+  return Number(normalized);
 }
 
 function formatStatus(session) {
@@ -148,6 +167,11 @@ function renderStep() {
     addEnumeratorDashboardButton();
     return;
   }
+  if (step.kind === "employer_characteristics") {
+    renderEmployerCharacteristics();
+    addEnumeratorDashboardButton();
+    return;
+  }
   if (step.kind === "transparent_productivity_definition") {
     renderInformationDefinition("transparent", step.info_type);
     addEnumeratorDashboardButton();
@@ -169,11 +193,7 @@ function renderStep() {
 
 function previousStep() {
   if (state.stepIndex === 0) {
-    if (state.enumeratorControls) {
-      returnToDashboardWithPasscode();
-    } else {
-      showLanding();
-    }
+    returnHomeWithPasscode();
     return;
   }
   const currentStep = state.session.flow[state.stepIndex];
@@ -216,14 +236,14 @@ function closePasscodeDialog() {
   document.querySelector(".passcode-backdrop")?.remove();
 }
 
-function returnToDashboardWithPasscode() {
+function requestPasscode(title, onSuccess) {
   closePasscodeDialog();
   document.body.insertAdjacentHTML(
     "beforeend",
     `
       <div class="passcode-backdrop" role="presentation">
         <form class="passcode-dialog" aria-label="Enumerator passcode">
-          <h2>Staff Passcode</h2>
+          <h2>${title}</h2>
           <label>
             Passcode
             <input name="passcode" type="password" inputmode="numeric" autocomplete="off" required>
@@ -250,14 +270,22 @@ function returnToDashboardWithPasscode() {
       return;
     }
     closePasscodeDialog();
-    await showDashboard();
+    await onSuccess();
+  });
+}
+
+function returnToDashboardWithPasscode() {
+  requestPasscode("Staff Passcode", showDashboard);
+}
+
+function returnHomeWithPasscode() {
+  requestPasscode("Home Passcode", async () => {
+    state.enumeratorControls = false;
+    showLanding();
   });
 }
 
 function addEnumeratorDashboardButton() {
-  if (!state.enumeratorControls) {
-    return;
-  }
   if (respondent.querySelector(".experiment-toolbar")) {
     return;
   }
@@ -265,11 +293,11 @@ function addEnumeratorDashboardButton() {
     "afterbegin",
     `
       <div class="experiment-toolbar">
-        <button class="secondary dashboard-passcode" type="button">Staff access</button>
+        <button class="secondary home-passcode" type="button">Home</button>
       </div>
     `
   );
-  respondent.querySelector(".dashboard-passcode").addEventListener("click", returnToDashboardWithPasscode);
+  respondent.querySelector(".home-passcode").addEventListener("click", returnHomeWithPasscode);
 }
 
 function renderEligibilityIntro(kind) {
@@ -284,12 +312,12 @@ function renderEligibilityIntro(kind) {
       <p>
         Please review each candidate carefully and answer the follow-up questions based on your
         genuine assessment. Your careful and honest assessment of each profile is important because
-        it helps identify candidates who may be suitable for social media admin or digital creative
-        roles.
+        it will help identify candidates who best suit your social media and digital creative role
+        requirements.
       </p>
       <p>
-        Please also confirm that you are currently hiring or considering hiring someone for social
-        media admin/social media manager-related position within the next 3 months.
+        Are you currently hiring or planning to hire someone for a social media admin, social media
+        manager, or related digital creative position within the next 3 months?
       </p>
       <form id="eligibility-form">
         <div class="eligibility-options">
@@ -299,7 +327,7 @@ function renderEligibilityIntro(kind) {
           </label>
           <label>
             <input type="radio" name="eligibility" value="considering_hiring" required>
-            <span>Yes, considering hiring within the next 3 months</span>
+            <span>Yes, planning to hire within the next 3 months</span>
           </label>
           <label>
             <input type="radio" name="eligibility" value="not_eligible" required>
@@ -335,6 +363,296 @@ function renderInformationDefinition(variant, infoType) {
   renderProductivityDefinition(variant);
 }
 
+function radioOptions(name, options) {
+  return options.map(([value, label]) => `
+    <label class="compact-option">
+      <input type="radio" name="${name}" value="${value}" required>
+      <span>${label}</span>
+    </label>
+  `).join("");
+}
+
+function renderEmployerCharacteristics() {
+  const currentYear = new Date().getFullYear();
+  respondent.innerHTML = `
+    <article class="characteristics-page">
+      <div class="characteristics-heading">
+        <div>
+          <h2>About You and Your Business</h2>
+          <p class="muted">Please answer the following questions before reviewing the candidate profiles.</p>
+        </div>
+      </div>
+      <form id="characteristics-form">
+        <div class="characteristics-grid">
+          <section class="characteristics-section">
+            <h3>A. Respondent characteristics</h3>
+            <fieldset class="compact-fieldset">
+              <legend>A1. Gender</legend>
+              <div class="compact-options">
+                ${radioOptions("gender", [["male", "Male"], ["female", "Female"], ["prefer_not_to_say", "Prefer not to say"]])}
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>A2. Date of birth</legend>
+              <div class="inline-inputs">
+                <label>Month
+                  <select name="birthMonth" required>
+                    <option value="">Select</option>
+                    ${Array.from({ length: 12 }, (_, index) => `<option value="${index + 1}">${index + 1}</option>`).join("")}
+                  </select>
+                </label>
+                <label>Year
+                  <input name="birthYear" type="number" min="1900" max="${currentYear - 15}" step="1" required>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>A3. Highest level of education completed</legend>
+              <div class="compact-options">
+                ${radioOptions("education", [
+                  ["primary_or_below", "Primary school or below"],
+                  ["junior_secondary", "Junior secondary school"],
+                  ["senior_or_vocational", "Senior secondary / vocational high school"],
+                  ["diploma", "Diploma"],
+                  ["bachelor", "Bachelor's degree"],
+                  ["master_or_above", "Master's degree or above"],
+                ])}
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>A4. Role in the business</legend>
+              <div class="compact-options">
+                ${radioOptions("businessRole", [
+                  ["owner", "Owner"], ["co_owner", "Co-owner"], ["manager", "Manager"],
+                  ["hr_recruitment", "HR / recruitment staff"], ["other", "Other"],
+                ])}
+              </div>
+              <input class="conditional-other hidden" name="businessRoleOther" placeholder="Please specify role">
+            </fieldset>
+          </section>
+
+          <section class="characteristics-section">
+            <h3>B. Business characteristics</h3>
+            <fieldset class="compact-fieldset">
+              <legend>B1. Main business sector</legend>
+              <div class="compact-options">
+                ${radioOptions("businessSector", [
+                  ["manufacturing", "Manufacturing"],
+                  ["accommodation_food", "Accommodation and food service activities"],
+                  ["wholesale_retail", "Wholesale and retail trade"],
+                  ["personal_services", "Other personal service activities (beauty services)"],
+                  ["other", "Other sector"],
+                ])}
+              </div>
+              <input class="conditional-other hidden" name="businessSectorOther" placeholder="Please specify sector">
+            </fieldset>
+            <div class="compact-pair">
+              <label><strong>B2. Year business was established</strong>
+                <input name="establishedYear" type="number" min="1800" max="${currentYear}" step="1" required>
+              </label>
+              <fieldset class="compact-fieldset">
+                <legend>B3. Number of workers</legend>
+                <div class="compact-options two-up">
+                  ${radioOptions("workers", [["1_4", "1–4"], ["5_19", "5–19"], ["20_99", "20–99"], ["100_plus", "100 or more"]])}
+                </div>
+              </fieldset>
+            </div>
+            <fieldset class="compact-fieldset">
+              <legend>B4. Approximate annual revenue</legend>
+              <div class="compact-options">
+                ${radioOptions("annualRevenue", [
+                  ["less_300m", "Less than IDR 300 million"],
+                  ["300m_to_2_5b", "IDR 300 million to less than IDR 2.5 billion"],
+                  ["2_5b_to_50b", "IDR 2.5 billion to less than IDR 50 billion"],
+                  ["50b_plus", "IDR 50 billion or more"],
+                  ["prefer_not_to_say", "Prefer not to say"],
+                ])}
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>B5. Business location</legend>
+              <div class="inline-inputs">
+                <label>City<input name="city" required></label>
+                <label>Province<input name="province" required></label>
+              </div>
+            </fieldset>
+          </section>
+
+          <section class="characteristics-section">
+            <h3>C. Digital-related activity</h3>
+            <fieldset class="compact-fieldset">
+              <legend>C2. Current use of social media for business</legend>
+              <p class="compact-prompt">Does your business currently have an active social media account for marketing or sales purposes?</p>
+              <div class="compact-options two-up">
+                ${radioOptions("activeSocialMedia", [["yes", "Yes"], ["no", "No"]])}
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset platforms-fieldset">
+              <legend>C3. Platforms currently used</legend>
+              <p class="compact-prompt">Select all that apply.</p>
+              <div class="compact-options two-up platform-options">
+                ${[
+                  ["instagram", "Instagram"], ["tiktok", "TikTok"], ["facebook", "Facebook"],
+                  ["whatsapp_business", "WhatsApp Business"], ["youtube", "YouTube"],
+                  ["x_twitter", "X / Twitter"], ["other", "Other"],
+                ].map(([value, label]) => `
+                  <label class="compact-option">
+                    <input type="checkbox" name="platforms" value="${value}">
+                    <span>${label}</span>
+                  </label>
+                `).join("")}
+              </div>
+              <input class="conditional-other hidden" name="platformOther" placeholder="Please specify platform">
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>C4. Previous hiring experience</legend>
+              <p class="compact-prompt">Has your business hired someone specifically to manage social media, content, or digital promotion before?</p>
+              <div class="compact-options two-up">
+                ${radioOptions("previousDigitalHiring", [["yes", "Yes"], ["no", "No"]])}
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>C5. Most recent work arrangement</legend>
+              <p class="compact-prompt">What arrangement was most recently used, or do you plan to use for the next hiring?</p>
+              <div class="compact-options">
+                ${radioOptions("workArrangement", [
+                  ["full_time", "Full-time employee"], ["part_time", "Part-time employee"],
+                  ["freelancer", "Freelancer / project-based worker"],
+                  ["family_informal", "Family member / informal help"], ["other", "Other"],
+                ])}
+              </div>
+              <input class="conditional-other hidden" name="workArrangementOther" placeholder="Please specify arrangement">
+            </fieldset>
+          </section>
+
+          <section class="characteristics-section">
+            <h3>E. Participation motivation</h3>
+            <fieldset class="compact-fieldset">
+              <legend>E1. Importance of participation fee</legend>
+              <p class="compact-prompt">How important is the participation fee in motivating you to participate in this session?</p>
+              <div class="importance-scale">
+                ${radioOptions("participationFeeImportance", [["1", "1 Not important"], ["2", "2 Slightly"], ["3", "3 Moderately"], ["4", "4 Important"], ["5", "5 Very important"]])}
+              </div>
+            </fieldset>
+            <fieldset class="compact-fieldset">
+              <legend>E2. Importance of candidate-matching benefit</legend>
+              <p class="compact-prompt">How important is the possibility of being matched with potential candidates in motivating you to participate in this session?</p>
+              <div class="importance-scale">
+                ${radioOptions("matchingBenefitImportance", [["1", "1 Not important"], ["2", "2 Slightly"], ["3", "3 Moderately"], ["4", "4 Important"], ["5", "5 Very important"]])}
+              </div>
+            </fieldset>
+          </section>
+        </div>
+        <div class="nav-actions">
+          <button class="secondary previous-characteristics" type="button">Previous</button>
+          <button type="submit">Save and continue</button>
+        </div>
+      </form>
+    </article>
+  `;
+
+  const form = respondent.querySelector("#characteristics-form");
+  populateCharacteristicsForm(form, state.session.characteristics);
+  attachCharacteristicsConditions(form);
+  form.querySelector(".previous-characteristics").addEventListener("click", previousStep);
+  form.addEventListener("submit", submitEmployerCharacteristics);
+}
+
+function populateCharacteristicsForm(form, saved) {
+  if (!saved) return;
+  const values = {
+    gender: saved.gender,
+    birthMonth: saved.birth_month,
+    birthYear: saved.birth_year,
+    education: saved.education,
+    businessRole: saved.business_role,
+    businessRoleOther: saved.business_role_other,
+    businessSector: saved.business_sector,
+    businessSectorOther: saved.business_sector_other,
+    establishedYear: saved.established_year,
+    workers: saved.workers,
+    annualRevenue: saved.annual_revenue,
+    city: saved.city,
+    province: saved.province,
+    activeSocialMedia: saved.active_social_media,
+    platformOther: saved.platform_other,
+    previousDigitalHiring: saved.previous_digital_hiring,
+    workArrangement: saved.work_arrangement,
+    workArrangementOther: saved.work_arrangement_other,
+    participationFeeImportance: saved.participation_fee_importance,
+    matchingBenefitImportance: saved.matching_benefit_importance,
+  };
+  Object.entries(values).forEach(([name, value]) => {
+    if (value !== undefined && value !== null && form.elements[name]) {
+      form.elements[name].value = value;
+    }
+  });
+  (saved.platforms || []).forEach((platform) => {
+    const checkbox = form.querySelector(`input[name="platforms"][value="${platform}"]`);
+    if (checkbox) checkbox.checked = true;
+  });
+}
+
+function attachCharacteristicsConditions(form) {
+  const toggleOther = (name, expectedValue, otherName) => {
+    const selected = form.elements[name].value;
+    const input = form.elements[otherName];
+    const active = selected === expectedValue;
+    input.classList.toggle("hidden", !active);
+    input.required = active;
+    if (!active) input.value = "";
+  };
+  const togglePlatformOther = () => {
+    const otherChecked = Boolean(form.querySelector('input[name="platforms"][value="other"]:checked'));
+    const input = form.elements.platformOther;
+    input.classList.toggle("hidden", !otherChecked);
+    input.required = otherChecked;
+    if (!otherChecked) input.value = "";
+  };
+  const togglePlatforms = () => {
+    const active = form.elements.activeSocialMedia.value === "yes";
+    form.querySelector(".platforms-fieldset").classList.toggle("disabled-section", !active);
+    form.querySelectorAll('input[name="platforms"]').forEach((input) => {
+      input.disabled = !active;
+      if (!active) input.checked = false;
+    });
+    if (!active) form.elements.platformOther.value = "";
+    togglePlatformOther();
+  };
+
+  form.addEventListener("change", (event) => {
+    if (event.target.name === "businessRole") toggleOther("businessRole", "other", "businessRoleOther");
+    if (event.target.name === "businessSector") toggleOther("businessSector", "other", "businessSectorOther");
+    if (event.target.name === "workArrangement") toggleOther("workArrangement", "other", "workArrangementOther");
+    if (event.target.name === "activeSocialMedia") togglePlatforms();
+    if (event.target.name === "platforms") togglePlatformOther();
+  });
+
+  toggleOther("businessRole", "other", "businessRoleOther");
+  toggleOther("businessSector", "other", "businessSectorOther");
+  toggleOther("workArrangement", "other", "workArrangementOther");
+  togglePlatforms();
+}
+
+async function submitEmployerCharacteristics(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  data.platforms = [...form.querySelectorAll('input[name="platforms"]:checked')].map((input) => input.value);
+  if (data.activeSocialMedia === "yes" && data.platforms.length === 0) {
+    alert("Please select at least one social media platform currently used.");
+    return;
+  }
+  await api(`/api/session/${state.session.session.id}/characteristics`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  state.session = await api(`/api/session/${state.session.session.id}`);
+  state.stepIndex += 1;
+  renderStep();
+}
+
 function renderPlaceboDefinition(variant) {
   const isReveal = variant === "hidden_reveal";
   const title = isReveal
@@ -344,8 +662,7 @@ function renderPlaceboDefinition(variant) {
     ? `
       <p>Thank you. You have now completed the first review of all candidate profiles.</p>
       <p>
-        In the next section, we will provide one additional non-performance detail for each
-        candidate. This information is the candidate's hobby.
+        In the next section, we will provide one additional personal detail for each candidate.
       </p>
       <p>
         Please review the same candidate profiles again with this additional information. As before,
@@ -354,12 +671,11 @@ function renderPlaceboDefinition(variant) {
     `
     : `
       <p>
-        Candidate profiles are accompanied by one additional non-performance detail: the candidate's
-        hobby.
+        Candidate profiles are accompanied by one additional personal detail.
       </p>
       <p>
-        This hobby information is included as supplementary background information and is not a
-        measure of candidate productivity or task performance.
+        This detail is included as supplementary background information and is not a measure of
+        candidate productivity or task performance.
       </p>
     `;
 
@@ -385,71 +701,96 @@ function renderProductivityDefinition(variant) {
     ? `
       <p>Thank you. You have now completed the first review of all candidate profiles.</p>
       <p>
-        In the next section, we will provide additional information on each candidate's performance.
-        This information comes from a standardized social media task completed by candidates over a
-        three-week period.
+        We understand that it can be difficult to judge how well a candidate will perform in this
+        role based on a profile alone. For this reason, all candidates completed a standardized
+        social media performance test.
       </p>
       <p>
-        All candidates completed the task under the same general conditions. Each participant
-        received the same participation compensation, and the three best performers received
-        additional prizes. Participants were free to use any software or AI tools they chose to
-        create content. However, they were not allowed to buy followers or generate fake interactions.
+        The test took place over three weeks in a competition setting. All candidates completed it
+        under the same general conditions and received the same participation compensation, while
+        the three best performers received additional prizes. Candidates were free to use any
+        software or AI tools to create content, but they were not allowed to buy followers or
+        generate fake interactions.
       </p>
       <p>
-        The additional information is intended to help summarize how each candidate performed in
-        managing social media content and attracting audience response.
+        In the next section, the candidate profiles will include information from this test to
+        summarize how each candidate performed in managing social media content and attracting
+        audience response.
       </p>
     `
     : `
       <p>
-        Candidate profiles are accompanied by performance information generated
-        through a standardized social media task. The performance numbers included in each
-        candidate profile are based on a three-week task completed by our candidates in a
-        competition setting, where we promised the same participation
-        compensation to all participants and additional prizes for the three best performers.
+        We understand that it can be difficult to judge how well a candidate will perform in this
+        role based on a profile alone. For this reason, all candidates completed a standardized
+        social media performance test.
       </p>
       <p>
-        All participants were free to use any software or AI tools of their choice in creating
-        content. However, participants were not allowed to buy followers or generate fake interactions.
+        The test took place over three weeks in a competition setting. All candidates completed it
+        under the same general conditions and received the same participation compensation, while
+        the three best performers received additional prizes. Candidates were free to use any
+        software or AI tools to create content, but they were not allowed to buy followers or
+        generate fake interactions.
       </p>
       <p>
-        The performance indicators shown in the candidate profile are intended to summarize how well
-        the candidate performed in managing social media content and attracting audience response.
+        The performance information shown in each candidate profile summarizes how the candidate
+        performed in managing social media content and attracting audience response during the test.
       </p>
     `;
 
   respondent.innerHTML = `
-    <article class="text-page">
+    <article class="text-page productivity-info-page">
       <h2>${title}</h2>
-      ${opening}
-      <p><strong>Definition of indicators</strong></p>
-      <ul>
-        <li>
-          <strong>Reach-type indicator:</strong> the average number of accounts reached per post
-          during the evaluation period.
-        </li>
-        <li>
-          <strong>Interaction-type indicator:</strong> the average number of audience interactions
-          per post during the evaluation period. Interactions are counted as likes or reactions,
-          comments, shares, and saves combined.
-        </li>
-      </ul>
-      <p>
-        To help illustrate the relative performance of each candidate, we also provide the talent-pool
-        median for the same indicators as a benchmark.
+      <div class="productivity-info-copy">
+        ${opening}
+        <p>
+          To help illustrate the relative performance of each candidate, we also provide the
+          talent-pool minimum, median, and maximum for the same indicators as a benchmark.
+        </p>
+        <p><strong>Benchmark of the talent pool</strong></p>
+        <ul>
+          <li>
+            <strong>Reach-type indicator:</strong> minimum 320, median 950, and maximum 4,100
+            accounts reached per post.
+          </li>
+          <li>
+            <strong>Interaction-type indicator:</strong> minimum 12, median 54, and maximum 280
+            interactions per post.
+          </li>
+        </ul>
+        ${isReveal ? "" : "<p>Please use this information as an additional reference when evaluating each candidate.</p>"}
+      </div>
+      <section class="metric-examples" aria-label="Examples of performance indicators">
+        <h3>Definition of indicators</h3>
+        <article class="metric-example">
+          <p>
+            <strong>Reach-type indicator:</strong> the average number of accounts reached per post
+            during the evaluation period. This is not the same as views; it refers to the number of
+            unique accounts reached by the post.
+          </p>
+          <img src="/assets/reach-example.jpg" alt="Example platform insight showing accounts reached">
+          <p>
+            <strong>Example of reach:</strong> the post has 14,545 views, but it reached 5,543
+            accounts. For the reach-type indicator, we use accounts reached.
+          </p>
+        </article>
+        <article class="metric-example">
+          <p>
+            <strong>Interaction-type indicator:</strong> the average number of audience interactions
+            per post during the evaluation period. Interactions are counted as likes or reactions,
+            comments, reposts, shares, and saves combined.
+          </p>
+          <img src="/assets/interaction-example.jpg" alt="Example platform insight showing likes, comments, reposts, shares, and saves">
+          <p>
+            <strong>Example of interaction:</strong> direct interactions are likes, comments,
+            reposts, shares, and saves. In this example, the interaction total is
+            133 + 13 + 9 + 3 + 5 = 163.
+          </p>
+        </article>
+      </section>
+      <p class="muted">
+        These screenshots are examples only. Candidate-specific values will be shown on each
+        candidate profile.
       </p>
-      <p><strong>Benchmark of the talent pool</strong></p>
-      <ul>
-        <li>
-          <strong>Median reach-type indicator: 950 accounts reached per post</strong>, meaning that
-          around half of the participants were below this value and half were above it.
-        </li>
-        <li>
-          <strong>Median interaction-type indicator: 54 interactions per post</strong>, meaning that
-          around half of the participants were below this value and half were above it.
-        </li>
-      </ul>
-      ${isReveal ? "" : "<p>Please use this information as an additional reference when evaluating each candidate.</p>"}
       ${navigationButtons("Continue", { disablePrevious: isReveal })}
     </article>
   `;
@@ -523,18 +864,21 @@ function renderCandidate(step) {
   const informationBlock = card.querySelector(".productivity-block");
   if (step.info_type === "productivity") {
     informationBlock.innerHTML = `<h3>Candidate Performance Information</h3>`;
-    const benchmarkMedians = extractBenchmarkMedians(candidate.productivity.benchmark || "");
     Object.entries(candidate.productivity).forEach(([key, value]) => {
       if (key === "benchmark") {
         return;
       }
-      const field = document.createElement("p");
-      field.innerHTML = `<strong>${labelize(key)}:</strong> ${value}${medianSuffix(key, benchmarkMedians)}`;
+      const field = document.createElement("div");
+      field.className = "performance-metric";
+      field.innerHTML = `
+        <p><strong>${labelize(key)}:</strong> ${formatCandidateMetric(key, value, candidate.pseudonym)}</p>
+        ${renderBenchmarkScale(key, value, candidate.pseudonym)}
+      `;
       informationBlock.append(field);
     });
   } else if (step.info_type === "placebo") {
     informationBlock.classList.add("placeholder");
-    informationBlock.innerHTML = `<h3>Candidate Additional Information</h3>`;
+    informationBlock.innerHTML = `<h3>Additional Information</h3>`;
     Object.entries(candidate.placebo).forEach(([key, value]) => {
       const field = document.createElement("p");
       field.innerHTML = `<strong>${labelize(key)}:</strong> ${value}`;
@@ -550,35 +894,142 @@ function renderCandidate(step) {
 
   form.addEventListener("change", (event) => {
     if (event.target.name === "hireInterest") {
+      form.dataset.reasonsConfirmed = "";
+      form.dataset.offerConfirmed = "";
       renderReasons(form, reasonOptions, rankedReasons, null);
     }
+    updateCandidateProgression(form);
   });
+  form.elements.wageValue.addEventListener("input", () => updateCandidateProgression(form));
+  form.elements.wageValue.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      confirmWageStep(form);
+    }
+  });
+  form.elements.conditionalWageOffer.addEventListener("input", () => {
+    form.dataset.offerConfirmed = "";
+    updateCandidateProgression(form);
+  });
+  form.elements.conditionalWageOffer.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      confirmOfferStep(form);
+    }
+  });
+  form.querySelector(".wage-next").addEventListener("click", () => confirmWageStep(form));
+  form.querySelector(".reasons-done").addEventListener("click", () => confirmReasonsStep(form));
+  form.querySelector(".offer-next").addEventListener("click", () => confirmOfferStep(form));
   form.querySelector(".previous-step").addEventListener("click", previousStep);
   form.addEventListener("submit", (event) => submitCandidateResponse(event, step, candidate));
 
   if (response) {
+    form.dataset.wageConfirmed = "true";
+    form.dataset.reasonsConfirmed = "true";
+    form.dataset.offerConfirmed = "true";
     form.elements.wageValue.value = response.wage_value;
     form.elements.conditionalWageOffer.value = response.conditional_wage_offer;
     form.elements.hireInterest.value = response.hire_interest;
   }
 
   renderReasons(form, reasonOptions, rankedReasons, response);
+  updateCandidateProgression(form, Boolean(response));
   respondent.innerHTML = "";
   respondent.append(card);
 }
 
+function setProgressiveFieldset(fieldset, visible) {
+  fieldset.classList.toggle("progressive-concealed", !visible);
+  fieldset.disabled = !visible;
+}
+
+function updateCandidateProgression(form, revealAll = false) {
+  const wageAnswered = Number.isSafeInteger(moneyToInteger(form.elements.wageValue.value));
+  if (!wageAnswered) {
+    form.dataset.wageConfirmed = "";
+    form.dataset.reasonsConfirmed = "";
+    form.dataset.offerConfirmed = "";
+  }
+  form.querySelector(".wage-next").disabled = !wageAnswered;
+
+  const wageConfirmed = revealAll || form.dataset.wageConfirmed === "true";
+  const hiringVisible = wageAnswered && wageConfirmed;
+  setProgressiveFieldset(form.querySelector(".question-hiring"), hiringVisible);
+
+  const hiringAnswered = hiringVisible && Boolean(form.elements.hireInterest.value);
+  const reasonsVisible = revealAll || hiringAnswered;
+  setProgressiveFieldset(form.querySelector(".question-reasons"), reasonsVisible);
+
+  const hasSelectedReason = form.querySelectorAll("input[name=reason]:checked").length > 0;
+  if (!hasSelectedReason) {
+    form.dataset.offerConfirmed = "";
+  }
+  form.querySelector(".reasons-done").disabled = !(reasonsVisible && hasSelectedReason);
+
+  const reasonsConfirmed = revealAll || form.dataset.reasonsConfirmed === "true";
+  const offerVisible = reasonsVisible && hasSelectedReason && reasonsConfirmed;
+  setProgressiveFieldset(form.querySelector(".question-offer"), offerVisible);
+
+  const offerAnswered = Number.isSafeInteger(moneyToInteger(form.elements.conditionalWageOffer.value));
+  form.querySelector(".offer-next").disabled = !(offerVisible && offerAnswered);
+
+  const offerConfirmed = revealAll || form.dataset.offerConfirmed === "true";
+  form.querySelector(".save-candidate-response").disabled = !(offerVisible && offerAnswered && offerConfirmed);
+}
+
+function confirmWageStep(form) {
+  const wageAnswered = Number.isSafeInteger(moneyToInteger(form.elements.wageValue.value));
+  if (!wageAnswered) {
+    form.elements.wageValue.reportValidity();
+    return;
+  }
+  form.dataset.wageConfirmed = "true";
+  updateCandidateProgression(form);
+  form.elements.hireInterest[0]?.focus();
+}
+
+function confirmReasonsStep(form) {
+  const hasSelectedReason = form.querySelectorAll("input[name=reason]:checked").length > 0;
+  if (!hasSelectedReason) {
+    alert("Please select at least one reason before continuing.");
+    return;
+  }
+  form.dataset.reasonsConfirmed = "true";
+  form.dataset.offerConfirmed = "";
+  updateCandidateProgression(form);
+  form.elements.conditionalWageOffer.focus();
+}
+
+function confirmOfferStep(form) {
+  const offerAnswered = Number.isSafeInteger(moneyToInteger(form.elements.conditionalWageOffer.value));
+  if (!offerAnswered) {
+    form.elements.conditionalWageOffer.reportValidity();
+    return;
+  }
+  form.dataset.offerConfirmed = "true";
+  updateCandidateProgression(form);
+  form.querySelector(".save-candidate-response").focus();
+}
+
 function renderReasons(form, reasonOptions, rankedReasons, response) {
   const hireInterest = form.elements.hireInterest.value;
+  const reasonsLegend = form.querySelector(".reasons-legend");
   reasonOptions.innerHTML = "";
   rankedReasons.innerHTML = "";
   if (!hireInterest) {
+    reasonsLegend.textContent = "Reason for hiring / not hiring";
     reasonOptions.innerHTML = "<p class=\"muted\">Choose hiring interest first.</p>";
     return;
   }
 
+  reasonsLegend.textContent = hireInterest === "yes" ? "Reasons for hiring" : "Reasons for not hiring";
+
   const canUseSavedReasons = response && response.hire_interest === hireInterest;
   const selected = new Set(canUseSavedReasons ? JSON.parse(response.selected_reasons_json) : []);
   const ranked = canUseSavedReasons ? JSON.parse(response.ranked_reasons_json) : [];
+  const savedScores = canUseSavedReasons && response.reason_scores_json
+    ? JSON.parse(response.reason_scores_json)
+    : {};
   const reasons = state.session.reasons.filter((reason) => reason.applies_to === hireInterest);
 
   reasons.forEach((reason) => {
@@ -587,15 +1038,33 @@ function renderReasons(form, reasonOptions, rankedReasons, response) {
     line.innerHTML = `
       <input type="checkbox" name="reason" value="${reason.id}">
       <span>${reason.label}</span>
-      <input name="rank-${reason.id}" inputmode="numeric" min="1" placeholder="Rank">
+      <span class="reason-rating">
+        <input type="range" name="score-${reason.id}" min="0" max="100" step="1" value="50" disabled>
+        <output>50</output>
+      </span>
     `;
     const checkbox = line.querySelector("input[type=checkbox]");
-    const rank = line.querySelector(`input[name="rank-${reason.id}"]`);
+    const score = line.querySelector(`input[name="score-${reason.id}"]`);
+    const output = line.querySelector("output");
     checkbox.checked = selected.has(reason.id);
-    const rankIndex = ranked.indexOf(reason.id);
-    if (rankIndex >= 0) {
-      rank.value = rankIndex + 1;
+    const savedScore = savedScores[String(reason.id)];
+    const legacyRankIndex = ranked.indexOf(reason.id);
+    if (savedScore !== undefined) {
+      score.value = savedScore;
+    } else if (legacyRankIndex >= 0) {
+      score.value = Math.max(0, 100 - legacyRankIndex * 25);
     }
+    score.disabled = !checkbox.checked;
+    output.textContent = score.value;
+    checkbox.addEventListener("change", () => {
+      score.disabled = !checkbox.checked;
+      form.dataset.reasonsConfirmed = "";
+      form.dataset.offerConfirmed = "";
+      updateCandidateProgression(form);
+    });
+    score.addEventListener("input", () => {
+      output.textContent = score.value;
+    });
     reasonOptions.append(line);
   });
 }
@@ -603,35 +1072,39 @@ function renderReasons(form, reasonOptions, rankedReasons, response) {
 async function submitCandidateResponse(event, step, candidate) {
   event.preventDefault();
   const form = event.currentTarget;
+  const wageValue = moneyToInteger(form.elements.wageValue.value);
+  const conditionalWageOffer = moneyToInteger(form.elements.conditionalWageOffer.value);
+  if (!Number.isSafeInteger(wageValue) || !Number.isSafeInteger(conditionalWageOffer)) {
+    alert("Please enter both salary amounts as whole numbers only.");
+    return;
+  }
   const selectedReasons = [...form.querySelectorAll("input[name=reason]:checked")].map((input) => Number(input.value));
+  const reasonScores = Object.fromEntries(
+    selectedReasons.map((reasonId) => [reasonId, Number(form.elements[`score-${reasonId}`].value)])
+  );
   const rankedReasons = selectedReasons
     .map((reasonId) => ({
       reasonId,
-      rank: Number(form.elements[`rank-${reasonId}`].value || 0),
+      score: reasonScores[reasonId],
     }))
-    .filter((item) => item.rank > 0)
-    .sort((a, b) => a.rank - b.rank)
+    .sort((a, b) => b.score - a.score)
     .map((item) => item.reasonId);
 
   if (!selectedReasons.length) {
     alert("Please select at least one reason.");
     return;
   }
-  if (rankedReasons.length !== selectedReasons.length) {
-    alert("Please rank every selected reason.");
-    return;
-  }
-
   await api(`/api/session/${state.session.session.id}/response`, {
     method: "POST",
     body: JSON.stringify({
       candidateId: candidate.id,
       stage: step.stage,
-      wageValue: moneyToInteger(form.elements.wageValue.value),
+      wageValue,
       hireInterest: form.elements.hireInterest.value,
       selectedReasons,
       rankedReasons,
-      conditionalWageOffer: moneyToInteger(form.elements.conditionalWageOffer.value),
+      reasonScores,
+      conditionalWageOffer,
       startedAt: new Date().toISOString(),
     }),
   });
@@ -656,23 +1129,65 @@ function labelize(key) {
   return key.replaceAll("_", " ");
 }
 
-function extractBenchmarkMedians(benchmarkText) {
-  const reachMatch = benchmarkText.match(/([\d,]+)\s+accounts reached per post/i);
-  const interactionMatch = benchmarkText.match(/([\d,]+)\s+interactions per post/i);
-  return {
-    reach: reachMatch ? reachMatch[1] : "",
-    interaction: interactionMatch ? interactionMatch[1] : "",
-  };
+function formatNumber(value) {
+  return Number(value).toLocaleString("en-US");
 }
 
-function medianSuffix(key, medians) {
-  if (key === "reach_indicator" && medians.reach) {
-    return ` (Median: ${medians.reach})`;
+function parseMetricValue(text) {
+  const match = String(text).match(/:\s*([\d,]+)/);
+  return match ? Number(match[1].replaceAll(",", "")) : null;
+}
+
+function formatCandidateMetric(key, textValue, candidateName) {
+  const value = parseMetricValue(textValue);
+  const formattedValue = Number.isFinite(value) ? formatNumber(value) : textValue;
+  if (key === "reach_indicator") {
+    return `Average accounts reached per post by ${candidateName}: ${formattedValue}`;
   }
-  if (key === "interaction_indicator" && medians.interaction) {
-    return ` (Median: ${medians.interaction})`;
+  if (key === "interaction_indicator") {
+    return `Average interactions per post by ${candidateName}: ${formattedValue}`;
   }
-  return "";
+  return textValue;
+}
+
+function benchmarkPosition(value, range) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value <= range.median) {
+    const lowerSpan = Math.max(1, range.median - range.min);
+    return Math.max(0, Math.min(50, ((value - range.min) / lowerSpan) * 50));
+  }
+  const upperSpan = Math.max(1, range.max - range.median);
+  return Math.max(50, Math.min(100, 50 + ((value - range.median) / upperSpan) * 50));
+}
+
+function renderBenchmarkScale(key, textValue, candidateName) {
+  const range = BENCHMARK_RANGES[key];
+  if (!range) {
+    return "";
+  }
+  const candidateValue = parseMetricValue(textValue);
+  const markerPosition = benchmarkPosition(candidateValue, range);
+  const candidateLabel = Number.isFinite(candidateValue)
+    ? `<p class="scale-caption">${candidateName} performance: ${formatNumber(candidateValue)} ${range.unit}</p>`
+    : "";
+  return `
+    <div class="benchmark-scale" style="--candidate-position: ${markerPosition}%">
+      <div class="scale-track" aria-hidden="true">
+        <span class="scale-tick scale-min"></span>
+        <span class="scale-tick scale-median"></span>
+        <span class="scale-tick scale-max"></span>
+        ${Number.isFinite(candidateValue) ? "<span class=\"candidate-marker\"></span>" : ""}
+      </div>
+      <div class="scale-labels">
+        <span>Min ${formatNumber(range.min)}</span>
+        <span>Median ${formatNumber(range.median)}</span>
+        <span>Max ${formatNumber(range.max)}</span>
+      </div>
+      ${candidateLabel}
+    </div>
+  `;
 }
 
 sessionForm.addEventListener("submit", async (event) => {

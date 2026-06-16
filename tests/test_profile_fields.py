@@ -23,8 +23,9 @@ class ProfileFieldTests(unittest.TestCase):
         self.assertNotIn("date_of_birth", display)
         self.assertIn("age", display)
         self.assertNotIn("place_of_birth", display)
+        self.assertNotIn("current_address", display)
 
-    def test_score_field_is_combined_with_education(self):
+    def test_score_fields_are_not_shown_in_profile(self):
         high_school = baseline_for_display(
             "C-101",
             {
@@ -41,9 +42,9 @@ class ProfileFieldTests(unittest.TestCase):
         )
 
         self.assertNotIn("average_score", high_school)
-        self.assertIn("average score = 67.7", high_school["education"])
+        self.assertEqual(high_school["education"], "Vocational high school, multimedia major")
         self.assertNotIn("gpa", diploma)
-        self.assertIn("GPA = 2.24", diploma["education"])
+        self.assertEqual(diploma["education"], "Diploma, information systems")
 
 
 if __name__ == "__main__":

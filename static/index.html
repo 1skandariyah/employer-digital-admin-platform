@@ -9,7 +9,7 @@
   <body>
     <header class="topbar">
       <div>
-        <h1>Social Media / Digital Admin Preference</h1>
+        <h1>Social Media Manager / Admin Preference</h1>
         <p>Candidate profile review for social media admin roles.</p>
       </div>
     </header>
@@ -74,7 +74,7 @@
               Reveal type
               <select name="revealType" required>
                 <option value="productivity">Productivity information</option>
-                <option value="placebo">Placebo information</option>
+                <option value="placebo">Neutral additional information</option>
               </select>
             </label>
             <label>
@@ -120,7 +120,8 @@
           <div class="section-heading">
             <h2>Enumerator Dashboard</h2>
             <div class="dashboard-actions">
-              <a class="button secondary" href="/api/export/responses.csv">Export CSV</a>
+              <a class="button secondary" href="/api/export/responses.csv">Candidate response CSV</a>
+              <a class="button secondary" href="/api/export/employer-characteristics.csv">Employer data CSV</a>
               <button id="refresh-sessions" class="secondary" type="button">Refresh</button>
             </div>
           </div>
@@ -142,41 +143,49 @@
         <div class="candidate-grid"></div>
         <section class="productivity-block"></section>
         <form class="response-form">
-          <fieldset>
-            <legend>Monthly pay assessment</legend>
+          <fieldset class="question-wage">
+            <legend>Typical monthly pay</legend>
             <label>
-              Based on this profile, how much do you think this person is worth to be paid monthly to manage your social media?
-              <input name="wageValue" inputmode="numeric" required placeholder="Monthly wage in IDR">
+              Based on this profile, what monthly salary do you think a candidate with a similar profile would typically receive for a social media admin or social media manager position?
+              <input name="wageValue" type="number" inputmode="numeric" min="0" step="1" required placeholder="Typical monthly salary in IDR">
             </label>
+            <button class="secondary question-next wage-next" type="button" disabled>Next</button>
           </fieldset>
-          <fieldset>
+          <fieldset class="progressive-fieldset progressive-concealed question-hiring" disabled>
             <legend>Hiring interest</legend>
+            <p class="question-text">Based on this profile, are you interested in hiring this candidate?</p>
             <div class="choice-row">
               <label><input type="radio" name="hireInterest" value="yes" required> Yes</label>
               <label><input type="radio" name="hireInterest" value="no" required> No</label>
             </div>
           </fieldset>
-          <fieldset class="reasons-fieldset">
-            <legend>Reasons</legend>
-            <p class="muted">Tick all that apply, then rank the selected reasons.</p>
+          <fieldset class="reasons-fieldset progressive-fieldset progressive-concealed question-reasons" disabled>
+            <legend class="reasons-legend">Reason for hiring / not hiring</legend>
+            <p class="muted">
+              Select all reasons that apply. For each selected reason, use the slider to indicate
+              how important it is to your decision: 0 means not important at all and 100 means
+              extremely important.
+            </p>
             <div class="reason-options"></div>
             <div class="ranked-reasons"></div>
+            <button class="secondary question-next reasons-done" type="button" disabled>Done</button>
           </fieldset>
-          <fieldset>
-            <legend>Monthly salary offer</legend>
+          <fieldset class="progressive-fieldset progressive-concealed question-offer" disabled>
+            <legend>Your monthly wage offer</legend>
             <label>
-              If somehow you wanted or needed to hire this person, what monthly salary would you be willing to offer?
-              <input name="conditionalWageOffer" inputmode="numeric" required placeholder="Monthly salary in IDR">
+              Suppose your business wanted to hire this candidate to manage its social media. What monthly salary would your business be willing to offer this candidate?
+              <input name="conditionalWageOffer" type="number" inputmode="numeric" min="0" step="1" required placeholder="Your monthly offer in IDR">
             </label>
+            <button class="secondary question-next offer-next" type="button" disabled>Next</button>
           </fieldset>
           <div class="nav-actions">
             <button class="secondary previous-step" type="button">Previous</button>
-            <button type="submit">Save and continue</button>
+            <button class="save-candidate-response" type="submit" disabled>Save and continue</button>
           </div>
         </form>
       </article>
     </template>
 
-    <script src="/app.js?v=19"></script>
+    <script src="/app.js?v=36"></script>
   </body>
 </html>
