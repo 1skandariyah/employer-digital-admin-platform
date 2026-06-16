@@ -350,7 +350,29 @@ function addEnumeratorDashboardButton() {
 function renderEligibilityIntro(kind) {
   respondent.innerHTML = `
     <article class="text-page">
-      <h2>Session Eligibility</h2>
+      <h2>Session Introduction</h2>
+      <p>
+        Thank you for joining this session.
+      </p>
+      <p>
+        In this session, we would like to understand your preferences when considering candidates
+        for a social media admin, social media manager, or related digital creative role.
+      </p>
+      <p>
+        Before continuing, we first need to confirm whether your business is currently hiring or
+        planning to hire someone for this type of position. We will also ask several questions
+        about you and your business before the candidate review begins.
+      </p>
+      <p>
+        To appreciate your time and participation, you will receive an IDR 350,000 participation
+        fee after completing the session.
+      </p>
+      <p>
+        In addition, your careful review will help us identify candidates from our talent pool who
+        may be a good match for your role. <strong>This may help reduce the time and effort needed
+        in your hiring process.</strong> For this reason, please review each part of the session
+        seriously and answer based on your genuine assessment.
+      </p>
       <p>
         Are you currently hiring or planning to hire someone for a social media admin, social media
         manager, or related digital creative position within the next 3 months?
