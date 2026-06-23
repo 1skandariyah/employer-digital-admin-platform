@@ -20,7 +20,6 @@ def valid_payload():
         "platforms": ["instagram", "whatsapp_business"],
         "previousDigitalHiring": "no",
         "workArrangement": "freelancer",
-        "participationFeeImportance": "3",
         "matchingBenefitImportance": "5",
     }
 
@@ -47,6 +46,17 @@ class EmployerCharacteristicsValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "businessRoleOther"):
             validate_employer_characteristics(payload)
+
+    def test_rejects_future_or_implausibly_old_years(self):
+        future_birth_year = valid_payload()
+        future_birth_year["birthYear"] = "2026"
+        with self.assertRaisesRegex(ValueError, "Birth year"):
+            validate_employer_characteristics(future_birth_year)
+
+        old_business_year = valid_payload()
+        old_business_year["establishedYear"] = "1899"
+        with self.assertRaisesRegex(ValueError, "Business establishment year"):
+            validate_employer_characteristics(old_business_year)
 
 
 if __name__ == "__main__":

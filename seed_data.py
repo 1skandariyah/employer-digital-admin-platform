@@ -82,18 +82,21 @@ ADDITIONAL_INFORMATION_BY_CODE = {
 }
 
 REASON_OPTIONS = [
-    ("yes", "Relevant experience is sufficient", 1),
-    ("yes", "Education fits the role", 2),
+    ("yes", "Education fits the role", 1),
+    ("yes", "Relevant experience is sufficient", 2),
     ("yes", "Skills are suitable for the role", 3),
     ("yes", "Expected productivity is high", 4),
-    ("yes", "Impressive productivity task performance", 5),
-    ("yes", "Additional detail suggests good fit", 6),
-    ("no", "Insufficient relevant experience", 1),
-    ("no", "Education does not fit the role", 2),
-    ("no", "Skills look too limited", 3),
-    ("no", "Expected productivity is too low", 4),
-    ("no", "Disappointing productivity task performance", 5),
-    ("no", "Additional detail suggests poor fit", 6),
+    ("yes", "Task performance is impressive", 5),
+    ("yes", "Additional Information suggests good fit", 6),
+    ("yes", "Other reason (please specify)", 7),
+    ("no", "Education does not fit the role", 1),
+    ("no", "Candidate may be overqualified for this role", 2),
+    ("no", "Insufficient relevant experience", 3),
+    ("no", "Skills look too limited", 4),
+    ("no", "Expected productivity is too low", 5),
+    ("no", "Task performance is disappointing", 6),
+    ("no", "Additional Information suggests poor fit", 7),
+    ("no", "Other reason (please specify)", 8),
 ]
 
 

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Default female profile avatar">
+  <rect width="120" height="120" fill="#f3eef5"/>
+  <path d="M25 108V50c0-23 14-37 35-37s35 14 35 37v58H25z" fill="#59616d"/>
+  <circle cx="60" cy="43" r="20" fill="#aab3bc"/>
+  <path d="M20 108c4-25 20-40 40-40s36 15 40 40" fill="#727f8b"/>
+</svg>

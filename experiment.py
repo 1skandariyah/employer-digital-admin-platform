@@ -5,8 +5,14 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
-TRANSPARENT = "transparent"
 HIDDEN = "hidden"
+HIDDEN_PLACEBO = "hidden_placebo"
+TRANSPARENT = "transparent"
+TRANSPARENT_PLACEBO = "transparent_placebo"
+HIDDEN_TREATMENTS = {HIDDEN, HIDDEN_PLACEBO}
+TRANSPARENT_TREATMENTS = {TRANSPARENT, TRANSPARENT_PLACEBO}
+TREATMENT_ARMS = HIDDEN_TREATMENTS | TRANSPARENT_TREATMENTS
+
 STAGE_TRANSPARENT = "transparent"
 STAGE_PRE = "pre"
 STAGE_POST = "post"
@@ -18,7 +24,7 @@ class FlowStep:
     stage: str | None = None
     candidate_id: int | None = None
     show_productivity: bool = False
-    info_type: str | None = None
+    show_additional_information: bool = False
     order_index: int | None = None
 
 
@@ -30,42 +36,57 @@ def randomized_candidate_order(candidate_ids: Iterable[int], seed: int) -> list[
     return ordered
 
 
+def is_hidden_treatment(treatment_arm: str) -> bool:
+    return treatment_arm in HIDDEN_TREATMENTS
+
+
+def visibility_for_stage(treatment_arm: str, stage: str) -> tuple[bool, bool]:
+    """Return productivity and additional-information visibility for one response stage."""
+    if treatment_arm == HIDDEN:
+        if stage not in {STAGE_PRE, STAGE_POST}:
+            raise ValueError(f"Unsupported hidden stage: {stage}")
+        return (stage == STAGE_POST, False)
+    if treatment_arm == HIDDEN_PLACEBO:
+        if stage not in {STAGE_PRE, STAGE_POST}:
+            raise ValueError(f"Unsupported hidden stage: {stage}")
+        return (stage == STAGE_POST, True)
+    if treatment_arm == TRANSPARENT:
+        if stage != STAGE_TRANSPARENT:
+            raise ValueError(f"Unsupported transparent stage: {stage}")
+        return (True, False)
+    if treatment_arm == TRANSPARENT_PLACEBO:
+        if stage != STAGE_TRANSPARENT:
+            raise ValueError(f"Unsupported transparent stage: {stage}")
+        return (True, True)
+    raise ValueError(f"Unsupported treatment arm: {treatment_arm}")
+
+
 def build_flow(
     treatment_arm: str,
     candidate_order: list[int],
-    reveal_type: str,
     post_candidate_order: list[int] | None = None,
 ) -> list[FlowStep]:
-    """Build the screen sequence for a session.
+    """Build the V2 employer-screen sequence for one treatment assignment."""
+    if treatment_arm not in TREATMENT_ARMS:
+        raise ValueError(f"Unsupported treatment arm: {treatment_arm}")
 
-    Hidden-arm sessions always repeat the exact same candidate IDs after reveal.
-    The reveal type is metadata for exports and copy, but candidate visibility is
-    governed by the treatment/stage rule here.
-    """
-    if treatment_arm == TRANSPARENT:
-        info_type = reveal_type
-        definition_steps = []
-        if info_type == "productivity":
-            definition_steps.append(
-                FlowStep(
-                    kind="transparent_productivity_definition",
-                    stage=STAGE_TRANSPARENT,
-                    show_productivity=True,
-                    info_type=info_type,
-                )
-            )
+    if treatment_arm in TRANSPARENT_TREATMENTS:
+        show_productivity, show_additional_information = visibility_for_stage(
+            treatment_arm, STAGE_TRANSPARENT
+        )
         return [
             FlowStep(kind="transparent_intro"),
             FlowStep(kind="employer_characteristics"),
             FlowStep(kind="candidate_review_intro"),
-            *definition_steps,
+            FlowStep(kind="transparent_productivity_definition", stage=STAGE_TRANSPARENT),
+            FlowStep(kind="transparent_productivity_reading", stage=STAGE_TRANSPARENT),
             *[
                 FlowStep(
                     kind="candidate",
                     stage=STAGE_TRANSPARENT,
                     candidate_id=candidate_id,
-                    show_productivity=(info_type == "productivity"),
-                    info_type=info_type,
+                    show_productivity=show_productivity,
+                    show_additional_information=show_additional_information,
                     order_index=index,
                 )
                 for index, candidate_id in enumerate(candidate_order, start=1)
@@ -73,45 +94,39 @@ def build_flow(
             FlowStep(kind="complete"),
         ]
 
-    if treatment_arm == HIDDEN:
-        info_type = reveal_type
-        post_order = post_candidate_order or candidate_order
-        return [
-            FlowStep(kind="hidden_intro"),
-            FlowStep(kind="employer_characteristics"),
-            FlowStep(kind="candidate_review_intro"),
-            *[
-                FlowStep(
-                    kind="candidate",
-                    stage=STAGE_PRE,
-                    candidate_id=candidate_id,
-                    show_productivity=False,
-                    info_type=None,
-                    order_index=index,
-                )
-                for index, candidate_id in enumerate(candidate_order, start=1)
-            ],
+    post_order = post_candidate_order or candidate_order
+    pre_productivity, pre_additional = visibility_for_stage(treatment_arm, STAGE_PRE)
+    post_productivity, post_additional = visibility_for_stage(treatment_arm, STAGE_POST)
+    return [
+        FlowStep(kind="hidden_intro"),
+        FlowStep(kind="employer_characteristics"),
+        FlowStep(kind="candidate_review_intro"),
+        *[
             FlowStep(
-                kind="hidden_reveal_productivity_definition",
+                kind="candidate",
+                stage=STAGE_PRE,
+                candidate_id=candidate_id,
+                show_productivity=pre_productivity,
+                show_additional_information=pre_additional,
+                order_index=index,
+            )
+            for index, candidate_id in enumerate(candidate_order, start=1)
+        ],
+        FlowStep(kind="hidden_reveal_productivity_definition", stage=STAGE_POST),
+        FlowStep(kind="hidden_reveal_productivity_reading", stage=STAGE_POST),
+        *[
+            FlowStep(
+                kind="candidate",
                 stage=STAGE_POST,
-                show_productivity=(info_type == "productivity"),
-                info_type=info_type,
-            ),
-            *[
-                FlowStep(
-                    kind="candidate",
-                    stage=STAGE_POST,
-                    candidate_id=candidate_id,
-                    show_productivity=(info_type == "productivity"),
-                    info_type=info_type,
-                    order_index=index,
-                )
-                for index, candidate_id in enumerate(post_order, start=1)
-            ],
-            FlowStep(kind="complete"),
-        ]
-
-    raise ValueError(f"Unsupported treatment arm: {treatment_arm}")
+                candidate_id=candidate_id,
+                show_productivity=post_productivity,
+                show_additional_information=post_additional,
+                order_index=index,
+            )
+            for index, candidate_id in enumerate(post_order, start=1)
+        ],
+        FlowStep(kind="complete"),
+    ]
 
 
 def next_unanswered_candidate_step(

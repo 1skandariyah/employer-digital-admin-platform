@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Social Media / Digital Admin Preference</title>
-    <link rel="stylesheet" href="/styles.css?v=6">
+    <link rel="stylesheet" href="/styles.css?v=8">
   </head>
   <body>
     <header class="topbar">
@@ -12,12 +12,15 @@
         <h1>Social Media Manager / Admin Preference</h1>
         <p>Candidate profile review for social media admin roles.</p>
       </div>
+      <div id="experiment-header-actions" class="header-actions hidden">
+        <button class="secondary home-passcode" type="button">Home</button>
+      </div>
     </header>
 
     <main>
       <section id="landing" class="landing-grid">
         <section class="panel">
-          <h2>Start Session</h2>
+          <h2>Open Existing Session</h2>
           <p class="muted">Enter the session code provided to you.</p>
           <form id="respondent-entry-form">
             <label>
@@ -27,6 +30,12 @@
             <button type="submit">Start</button>
             <p id="respondent-entry-status" class="muted"></p>
           </form>
+        </section>
+
+        <section class="panel">
+          <h2>Create New Session</h2>
+          <p class="muted">Set up a new guided employer session.</p>
+          <button id="quick-create-session" type="button">Create new session</button>
         </section>
 
         <section class="panel">
@@ -70,15 +79,10 @@
             <label>
               Treatment arm
               <select name="treatmentArm" required>
+                <option value="hidden">Hidden</option>
+                <option value="hidden_placebo">Hidden + additional information</option>
                 <option value="transparent">Transparent</option>
-                <option value="hidden">Hidden with reveal</option>
-              </select>
-            </label>
-            <label>
-              Reveal type
-              <select name="revealType" required>
-                <option value="productivity">Productivity information</option>
-                <option value="placebo">Neutral additional information</option>
+                <option value="transparent_placebo">Transparent + additional information</option>
               </select>
             </label>
             <label>
@@ -107,6 +111,7 @@
               <input name="randomizationSeed" inputmode="numeric" placeholder="Optional">
             </label>
             <button type="submit">Create guided session</button>
+            <p id="session-create-status" class="muted" aria-live="polite"></p>
           </form>
           <section class="candidate-tools">
             <h2>Candidate Data</h2>
@@ -166,9 +171,8 @@
           <fieldset class="reasons-fieldset progressive-fieldset progressive-concealed question-reasons" disabled>
             <legend class="reasons-legend">Reason for hiring / not hiring</legend>
             <p class="muted">
-              Select all reasons that apply. For each selected reason, use the slider to indicate
-              how important it is to your decision: 0 means not important at all and 100 means
-              extremely important.
+              Use the sliders to indicate how important each factor is to your decision: 0 means
+              the factor is totally irrelevant, while 100 means it is very important.
             </p>
             <div class="reason-options"></div>
             <div class="ranked-reasons"></div>
@@ -184,12 +188,16 @@
           </fieldset>
           <div class="nav-actions">
             <button class="secondary previous-step" type="button">Previous</button>
-            <button class="save-candidate-response" type="submit" disabled>Save and continue</button>
+            <div class="candidate-nav-actions">
+              <span class="draft-status" aria-live="polite"></span>
+              <button class="secondary save-candidate-draft" type="button">Save draft</button>
+              <button class="save-candidate-response" type="submit" disabled>Save and continue</button>
+            </div>
           </div>
         </form>
       </article>
     </template>
 
-    <script src="/app.js?v=46"></script>
+    <script src="/app.js?v=11"></script>
   </body>
 </html>

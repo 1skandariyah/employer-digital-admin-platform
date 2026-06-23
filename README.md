@@ -1,4 +1,4 @@
-# Social Media / Digital Admin Preference MVP
+# Social Media / Digital Admin Preference MVP - Protocol V2
 
 Research MVP for guided candidate-profile review sessions with Indonesian MSME
 employers considering entry-level social media or digital admin workers.
@@ -22,7 +22,7 @@ python server.py
 Then open:
 
 ```text
-http://localhost:8000
+http://localhost:8001
 ```
 
 If the database does not exist, `server.py` creates `experiment.db`, applies
@@ -50,9 +50,10 @@ fieldwork, move the database to persistent hosted storage such as Postgres.
 
 - Enumerator dashboard
 - Guided session creation
-- Transparent and hidden treatment flows
-- Hidden-arm pre/post repeated candidate IDs
-- Productivity and placebo reveal type metadata
+- Four treatment arms: hidden, hidden plus additional information, transparent,
+  and transparent plus additional information
+- Hidden-arm pre/post repeated candidate IDs with a separately randomized post order
+- Response-level productivity and additional-information visibility metadata
 - Candidate-level questionnaire
 - Resume by saved responses
 - CSV response export

@@ -14,7 +14,14 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from experiment import build_flow, next_resume_step, randomized_candidate_order
+from experiment import (
+    TREATMENT_ARMS,
+    build_flow,
+    is_hidden_treatment,
+    next_resume_step,
+    randomized_candidate_order,
+    visibility_for_stage,
+)
 from seed_data import (
     ADDITIONAL_INFORMATION_BY_CODE,
     PRODUCTIVITY_BY_CODE,
@@ -120,6 +127,11 @@ def baseline_for_display(code: str, baseline: dict) -> dict:
             continue
         if key in {"current_address", "average_score", "gpa"}:
             continue
+        if key == "education":
+            level, separator, major = str(value).partition(",")
+            display["education_level"] = level.strip()
+            display["education_major"] = major.strip() if separator and major.strip() else "Not specified"
+            continue
         display[key] = value
     return display
 
@@ -184,6 +196,48 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+def session_reason_options(conn: sqlite3.Connection, session_id: int) -> list[sqlite3.Row]:
+    """Return the reason wording and order fixed for one session."""
+    snapshot = conn.execute(
+        """
+        SELECT reason_option_id AS id, applies_to, label, sort_order
+        FROM session_reason_options
+        WHERE session_id = ?
+        ORDER BY applies_to, sort_order, reason_option_id
+        """,
+        (session_id,),
+    ).fetchall()
+    if snapshot:
+        return snapshot
+    return conn.execute(
+        "SELECT id, applies_to, label, sort_order FROM reason_options WHERE active = 1 ORDER BY applies_to, sort_order, id"
+    ).fetchall()
+
+
+def snapshot_session_reason_options(conn: sqlite3.Connection, session_id: int) -> None:
+    """Freeze instrument wording and order so later edits do not alter active sessions."""
+    existing = conn.execute(
+        "SELECT 1 FROM session_reason_options WHERE session_id = ? LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    if existing is not None:
+        return
+    reasons = conn.execute(
+        "SELECT id, applies_to, label, sort_order FROM reason_options WHERE active = 1 ORDER BY applies_to, sort_order, id"
+    ).fetchall()
+    conn.executemany(
+        """
+        INSERT INTO session_reason_options (
+          session_id, reason_option_id, applies_to, label, sort_order
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        [
+            (session_id, reason["id"], reason["applies_to"], reason["label"], reason["sort_order"])
+            for reason in reasons
+        ],
+    )
+
+
 def init_database() -> None:
     with connect() as conn:
         conn.executescript((BASE_DIR / "schema.sql").read_text(encoding="utf-8"))
@@ -200,6 +254,8 @@ def migrate_database(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_session_code ON sessions(session_code)")
     if "requested_candidate_count" not in session_columns:
         conn.execute("ALTER TABLE sessions ADD COLUMN requested_candidate_count INTEGER NOT NULL DEFAULT 20")
+    if "protocol_version" not in session_columns:
+        conn.execute("ALTER TABLE sessions ADD COLUMN protocol_version TEXT NOT NULL DEFAULT 'v2'")
 
     candidate_columns = {row["name"] for row in conn.execute("PRAGMA table_info(candidates)")}
     if "placebo_json" not in candidate_columns:
@@ -215,20 +271,59 @@ def migrate_database(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE responses ADD COLUMN reason_scores_json TEXT NOT NULL DEFAULT '{}'"
         )
+    if "show_productivity" not in response_columns:
+        conn.execute("ALTER TABLE responses ADD COLUMN show_productivity INTEGER NOT NULL DEFAULT 0")
+    if "show_additional_information" not in response_columns:
+        conn.execute("ALTER TABLE responses ADD COLUMN show_additional_information INTEGER NOT NULL DEFAULT 0")
+    if "other_reason_text" not in response_columns:
+        conn.execute("ALTER TABLE responses ADD COLUMN other_reason_text TEXT")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS session_reason_options (
+          session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+          reason_option_id INTEGER NOT NULL REFERENCES reason_options(id),
+          applies_to TEXT NOT NULL CHECK (applies_to IN ('yes', 'no')),
+          label TEXT NOT NULL,
+          sort_order INTEGER NOT NULL,
+          PRIMARY KEY (session_id, reason_option_id)
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS response_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+          candidate_id INTEGER NOT NULL REFERENCES candidates(id),
+          stage TEXT NOT NULL CHECK (stage IN ('transparent', 'pre', 'post')),
+          response_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(session_id, candidate_id, stage)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_response_drafts_session ON response_drafts(session_id)")
+
+    # Preserve active or completed sessions before applying the revised instrument.
+    for session in conn.execute("SELECT id FROM sessions"):
+        snapshot_session_reason_options(conn, session["id"])
 
     for applies_to, label, sort_order in REASON_OPTIONS:
-        cursor = conn.execute(
-            """
-            UPDATE reason_options
-            SET label = ?
-            WHERE applies_to = ? AND sort_order = ?
-            """,
-            (label, applies_to, sort_order),
-        )
-        if cursor.rowcount == 0:
+        existing = conn.execute(
+            "SELECT id FROM reason_options WHERE applies_to = ? AND label = ?",
+            (applies_to, label),
+        ).fetchone()
+        if existing is None:
             conn.execute(
                 "INSERT INTO reason_options (applies_to, label, sort_order) VALUES (?, ?, ?)",
                 (applies_to, label, sort_order),
+            )
+        else:
+            conn.execute(
+                "UPDATE reason_options SET sort_order = ? WHERE id = ?",
+                (sort_order, existing["id"]),
             )
 
     experience_by_code = {
@@ -260,9 +355,11 @@ def migrate_database(conn: sqlite3.Connection) -> None:
                 (json.dumps(PRODUCTIVITY_BY_CODE[row["code"]]), row["code"]),
             )
 
-    hidden_sessions = conn.execute(
-        "SELECT id, randomization_seed FROM sessions WHERE treatment_arm = 'hidden'"
-    ).fetchall()
+    hidden_sessions = [
+        session
+        for session in conn.execute("SELECT id, treatment_arm, randomization_seed FROM sessions")
+        if is_hidden_treatment(session["treatment_arm"])
+    ]
     for session in hidden_sessions:
         post_response_count = conn.execute(
             "SELECT COUNT(*) FROM responses WHERE session_id = ? AND stage = 'post'",
@@ -413,7 +510,6 @@ def validate_employer_characteristics(payload: dict) -> dict:
         "activeSocialMedia",
         "previousDigitalHiring",
         "workArrangement",
-        "participationFeeImportance",
         "matchingBenefitImportance",
     ]
     missing = [key for key in required if payload.get(key) in (None, "")]
@@ -436,14 +532,17 @@ def validate_employer_characteristics(payload: dict) -> dict:
             raise ValueError(f"Invalid value for {payload_key}")
 
     current_year = date.today().year
-    birth_month = int(payload["birthMonth"])
-    birth_year = int(payload["birthYear"])
-    established_year = int(payload["establishedYear"])
+    try:
+        birth_month = int(payload["birthMonth"])
+        birth_year = int(payload["birthYear"])
+        established_year = int(payload["establishedYear"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Birth year and business establishment year must be whole numbers") from exc
     if not 1 <= birth_month <= 12:
         raise ValueError("Birth month must be between 1 and 12")
     if not 1900 <= birth_year <= current_year - 15:
         raise ValueError("Birth year is outside the accepted range")
-    if not 1800 <= established_year <= current_year:
+    if not 1900 <= established_year <= current_year:
         raise ValueError("Business establishment year is outside the accepted range")
 
     platforms = payload.get("platforms") or []
@@ -464,9 +563,11 @@ def validate_employer_characteristics(payload: dict) -> dict:
         if required_if_selected and not str(payload.get(key, "")).strip():
             raise ValueError(f"Please specify {key}")
 
-    fee_importance = int(payload["participationFeeImportance"])
-    match_importance = int(payload["matchingBenefitImportance"])
-    if fee_importance not in range(1, 6) or match_importance not in range(1, 6):
+    try:
+        match_importance = int(payload["matchingBenefitImportance"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Importance ratings must be whole numbers") from exc
+    if match_importance not in range(1, 6):
         raise ValueError("Importance ratings must be between 1 and 5")
 
     return {
@@ -489,7 +590,6 @@ def validate_employer_characteristics(payload: dict) -> dict:
         "previous_digital_hiring": payload["previousDigitalHiring"],
         "work_arrangement": payload["workArrangement"],
         "work_arrangement_other": str(payload.get("workArrangementOther", "")).strip(),
-        "participation_fee_importance": fee_importance,
         "matching_benefit_importance": match_importance,
     }
 
@@ -550,6 +650,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 self.handle_create_session()
             elif parsed.path == "/api/candidates/import":
                 self.handle_import_candidates()
+            elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/response/draft"):
+                self.handle_save_response_draft(parsed.path)
             elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/response"):
                 self.handle_save_response(parsed.path)
             elif parsed.path.startswith("/api/session/") and parsed.path.endswith("/characteristics"):
@@ -607,7 +709,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 """
             ):
                 item = row_to_dict(row)
-                expected = item["candidate_count"] if item["treatment_arm"] == "transparent" else item["candidate_count"] * 2
+                expected = item["candidate_count"] * (2 if is_hidden_treatment(item["treatment_arm"]) else 1)
                 item["expected_response_count"] = expected
                 sessions.append(item)
         self.send_json({"sessions": sessions})
@@ -666,6 +768,14 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 row_to_dict(row)
                 for row in conn.execute("SELECT * FROM responses WHERE session_id = ?", (session_id,))
             ]
+            drafts = []
+            for row in conn.execute(
+                "SELECT candidate_id, stage, response_json, updated_at FROM response_drafts WHERE session_id = ?",
+                (session_id,),
+            ):
+                draft = row_to_dict(row)
+                draft["response"] = json.loads(draft.pop("response_json"))
+                drafts.append(draft)
             characteristics_row = conn.execute(
                 "SELECT response_json FROM employer_characteristics WHERE session_id = ?",
                 (session_id,),
@@ -684,7 +794,6 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             flow_steps = build_flow(
                 session["treatment_arm"],
                 candidate_order,
-                session["reveal_type"],
                 post_candidate_order,
             )
             flow = [step.__dict__ for step in flow_steps]
@@ -698,8 +807,9 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             payload = {
                 "session": row_to_dict(session),
                 "candidates": candidates,
-                "reasons": [row_to_dict(row) for row in conn.execute("SELECT * FROM reason_options WHERE active = 1 ORDER BY applies_to, sort_order, id")],
+                "reasons": [row_to_dict(row) for row in session_reason_options(conn, session_id)],
                 "responses": responses,
+                "drafts": drafts,
                 "characteristics": characteristics,
                 "flow": flow,
                 "resumeStepIndex": resume_step_index,
@@ -708,7 +818,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
 
     def handle_create_session(self) -> None:
         payload = read_json_body(self)
-        required = ["employerName", "enumeratorId", "treatmentArm", "revealType", "candidateSetId", "candidateLimit", "mode"]
+        required = ["employerName", "enumeratorId", "treatmentArm", "candidateSetId", "candidateLimit", "mode"]
         missing = [key for key in required if not payload.get(key)]
         if missing:
             raise ValueError(f"Missing required fields: {', '.join(missing)}")
@@ -720,6 +830,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         requested_candidate_count = int(payload["candidateLimit"])
         if requested_candidate_count not in (3, 5, 10, 15, 20):
             raise ValueError("Candidate count must be one of 3, 5, 10, 15, or 20")
+        if payload["treatmentArm"] not in TREATMENT_ARMS:
+            raise ValueError("Unsupported V2 treatment arm")
         with connect() as conn:
             if requested_session_code:
                 existing_code = conn.execute(
@@ -736,16 +848,15 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             session = conn.execute(
                 """
                 INSERT INTO sessions (
-                  employer_id, enumerator_id, treatment_arm, reveal_type,
+                  employer_id, enumerator_id, treatment_arm,
                   candidate_set_id, requested_candidate_count, mode, randomization_seed
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     employer_id,
                     int(payload["enumeratorId"]),
                     payload["treatmentArm"],
-                    payload["revealType"],
                     int(payload["candidateSetId"]),
                     requested_candidate_count,
                     payload["mode"],
@@ -758,6 +869,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 "UPDATE sessions SET session_code = ? WHERE id = ?",
                 (session_code, session_id),
             )
+            snapshot_session_reason_options(conn, session_id)
             candidate_ids = [
                 row[0]
                 for row in conn.execute(
@@ -773,7 +885,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             if not candidate_ids:
                 raise ValueError("Selected candidate set has no candidates")
             order = randomized_candidate_order(candidate_ids, seed)[:requested_candidate_count]
-            if payload["treatmentArm"] == "hidden":
+            if is_hidden_treatment(payload["treatmentArm"]):
                 post_order = randomized_distinct_candidate_order(order, seed + 1, order)
             else:
                 post_order = order
@@ -801,7 +913,17 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                         {
                             "session_code": session_code,
                             "treatment_arm": payload["treatmentArm"],
-                            "reveal_type": payload["revealType"],
+                            "pre_visibility": {
+                                "productivity": visibility_for_stage(payload["treatmentArm"], "pre")[0],
+                                "additional_information": visibility_for_stage(payload["treatmentArm"], "pre")[1],
+                            } if is_hidden_treatment(payload["treatmentArm"]) else {
+                                "productivity": visibility_for_stage(payload["treatmentArm"], "transparent")[0],
+                                "additional_information": visibility_for_stage(payload["treatmentArm"], "transparent")[1],
+                            },
+                            "post_visibility": {
+                                "productivity": visibility_for_stage(payload["treatmentArm"], "post")[0],
+                                "additional_information": visibility_for_stage(payload["treatmentArm"], "post")[1],
+                            } if is_hidden_treatment(payload["treatmentArm"]) else None,
                             "candidate_set_id": int(payload["candidateSetId"]),
                             "requested_candidate_count": requested_candidate_count,
                             "available_candidate_count": len(candidate_ids),
@@ -995,6 +1117,78 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             conn.commit()
         self.send_json({"ok": True, "characteristics": characteristics})
 
+    def handle_save_response_draft(self, path: str) -> None:
+        locator = session_locator_from_path(path)
+        payload = read_json_body(self)
+        try:
+            candidate_id = int(payload.get("candidateId"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Candidate ID is required") from exc
+        stage = payload.get("stage")
+        if stage not in {"transparent", "pre", "post"}:
+            raise ValueError("Invalid candidate-review stage")
+
+        def optional_money(field: str) -> int | None:
+            value = payload.get(field)
+            if value in (None, ""):
+                return None
+            if isinstance(value, bool) or not str(value).isdigit():
+                raise ValueError("Salary responses must contain whole numbers only")
+            parsed = int(value)
+            if parsed < 0:
+                raise ValueError("Wage values must be non-negative")
+            return parsed
+
+        hire_interest = payload.get("hireInterest") or None
+        if hire_interest not in {None, "yes", "no"}:
+            raise ValueError("Hiring interest must be yes or no")
+        raw_scores = payload.get("reasonScores") or {}
+        if not isinstance(raw_scores, dict):
+            raise ValueError("Reason importance scores must be a set of scores")
+        try:
+            reason_scores = {int(reason_id): int(score) for reason_id, score in raw_scores.items()}
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Reason importance scores must be whole numbers") from exc
+        if any(score < 0 or score > 100 for score in reason_scores.values()):
+            raise ValueError("Reason importance scores must be between 0 and 100")
+        other_reason_text = str(payload.get("otherReasonText") or "").strip()
+        if len(other_reason_text) > 300:
+            raise ValueError("Other reason text must be 300 characters or fewer")
+
+        draft = {
+            "wageValue": optional_money("wageValue"),
+            "hireInterest": hire_interest,
+            "reasonScores": reason_scores,
+            "otherReasonText": other_reason_text,
+            "conditionalWageOffer": optional_money("conditionalWageOffer"),
+        }
+        with connect() as conn:
+            session_id = resolve_session_id(conn, locator)
+            if session_id is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
+            belongs_to_session = conn.execute(
+                "SELECT 1 FROM session_candidates WHERE session_id = ? AND candidate_id = ?",
+                (session_id, candidate_id),
+            ).fetchone()
+            if belongs_to_session is None:
+                raise ValueError("Candidate is not assigned to this session")
+            conn.execute(
+                "UPDATE sessions SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP) WHERE id = ?",
+                (session_id,),
+            )
+            conn.execute(
+                """
+                INSERT INTO response_drafts (session_id, candidate_id, stage, response_json)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id, candidate_id, stage)
+                DO UPDATE SET response_json = excluded.response_json, updated_at = CURRENT_TIMESTAMP
+                """,
+                (session_id, candidate_id, stage, json.dumps(draft)),
+            )
+            conn.commit()
+        self.send_json({"ok": True, "draft": draft})
+
     def handle_save_response(self, path: str) -> None:
         locator = session_locator_from_path(path)
         payload = read_json_body(self)
@@ -1006,6 +1200,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "selectedReasons",
             "reasonScores",
             "conditionalWageOffer",
+            "showProductivity",
+            "showAdditionalInformation",
         ]
         missing = [key for key in required if payload.get(key) in (None, "")]
         if missing:
@@ -1037,6 +1233,11 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             raise ValueError("Every selected reason must have an importance score")
         if any(score < 0 or score > 100 for score in reason_scores.values()):
             raise ValueError("Reason importance scores must be between 0 and 100")
+        if not any(score > 0 for score in reason_scores.values()):
+            raise ValueError("Give at least one reason an importance score above zero")
+        other_reason_text = str(payload.get("otherReasonText") or "").strip()
+        if len(other_reason_text) > 300:
+            raise ValueError("Other reason text must be 300 characters or fewer")
         selected_positions = {
             reason_id: index for index, reason_id in enumerate(selected_reason_ids)
         }
@@ -1050,6 +1251,51 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             if session_id is None:
                 self.send_json({"error": "Session not found"}, status=404)
                 return
+            session = conn.execute(
+                "SELECT treatment_arm FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if session is None:
+                self.send_json({"error": "Session not found"}, status=404)
+                return
+            stage = payload["stage"]
+            if is_hidden_treatment(session["treatment_arm"]):
+                if stage not in {"pre", "post"}:
+                    raise ValueError("Hidden sessions require a pre or post response stage")
+            elif stage != "transparent":
+                raise ValueError("Transparent sessions require a transparent response stage")
+            expected_productivity, expected_additional = visibility_for_stage(
+                session["treatment_arm"], stage
+            )
+            if (
+                bool(payload["showProductivity"]) != expected_productivity
+                or bool(payload["showAdditionalInformation"]) != expected_additional
+            ):
+                raise ValueError("Response visibility does not match the assigned treatment stage")
+            belongs_to_session = conn.execute(
+                "SELECT 1 FROM session_candidates WHERE session_id = ? AND candidate_id = ?",
+                (session_id, int(payload["candidateId"])),
+            ).fetchone()
+            if belongs_to_session is None:
+                raise ValueError("Candidate is not assigned to this session")
+            allowed_reasons = {
+                row["id"]: row for row in session_reason_options(conn, session_id)
+            }
+            if any(reason_id not in allowed_reasons for reason_id in selected_reason_ids):
+                raise ValueError("A selected reason is not configured for this session")
+            if any(
+                allowed_reasons[reason_id]["applies_to"] != payload["hireInterest"]
+                for reason_id in selected_reason_ids
+            ):
+                raise ValueError("Selected reasons must match the hiring-interest response")
+            other_reason_selected = any(
+                allowed_reasons[reason_id]["label"] == "Other reason (please specify)"
+                and reason_scores[reason_id] > 0
+                for reason_id in selected_reason_ids
+            )
+            if other_reason_selected and not other_reason_text:
+                raise ValueError("Please specify the other reason")
+            if not other_reason_selected:
+                other_reason_text = None
             conn.execute(
                 "UPDATE sessions SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP) WHERE id = ?",
                 (session_id,),
@@ -1057,18 +1303,22 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             conn.execute(
                 """
                 INSERT INTO responses (
-                  session_id, candidate_id, stage, wage_value, hire_interest,
+                  session_id, candidate_id, stage, show_productivity, show_additional_information,
+                  wage_value, hire_interest,
                   selected_reasons_json, ranked_reasons_json, reason_scores_json,
-                  conditional_wage_offer, started_at
+                  other_reason_text, conditional_wage_offer, started_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id, candidate_id, stage)
                 DO UPDATE SET
+                  show_productivity = excluded.show_productivity,
+                  show_additional_information = excluded.show_additional_information,
                   wage_value = excluded.wage_value,
                   hire_interest = excluded.hire_interest,
                   selected_reasons_json = excluded.selected_reasons_json,
                   ranked_reasons_json = excluded.ranked_reasons_json,
                   reason_scores_json = excluded.reason_scores_json,
+                  other_reason_text = excluded.other_reason_text,
                   conditional_wage_offer = excluded.conditional_wage_offer,
                   submitted_at = CURRENT_TIMESTAMP
                 """,
@@ -1076,19 +1326,25 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                     session_id,
                     int(payload["candidateId"]),
                     payload["stage"],
+                    int(expected_productivity),
+                    int(expected_additional),
                     wage,
                     payload["hireInterest"],
                     json.dumps(selected_reason_ids),
                     json.dumps(ranked_reasons),
                     json.dumps(reason_scores),
+                    other_reason_text,
                     conditional_wage,
                     payload.get("startedAt"),
                 ),
             )
+            conn.execute(
+                "DELETE FROM response_drafts WHERE session_id = ? AND candidate_id = ? AND stage = ?",
+                (session_id, int(payload["candidateId"]), payload["stage"]),
+            )
 
             candidate_count = conn.execute("SELECT COUNT(*) FROM session_candidates WHERE session_id = ?", (session_id,)).fetchone()[0]
-            treatment = conn.execute("SELECT treatment_arm FROM sessions WHERE id = ?", (session_id,)).fetchone()[0]
-            expected = candidate_count if treatment == "transparent" else candidate_count * 2
+            expected = candidate_count * (2 if is_hidden_treatment(session["treatment_arm"]) else 1)
             actual = conn.execute("SELECT COUNT(*) FROM responses WHERE session_id = ?", (session_id,)).fetchone()[0]
             if actual >= expected:
                 conn.execute(
@@ -1109,8 +1365,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                   e.name AS employer_name,
                   e.business_name,
                   u.name AS enumerator_name,
+                  s.protocol_version,
                   s.treatment_arm,
-                  s.reveal_type,
                   s.mode,
                   ec.response_json,
                   ec.created_at AS characteristics_created_at,
@@ -1143,7 +1399,6 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "previous_digital_hiring",
             "work_arrangement",
             "work_arrangement_other",
-            "participation_fee_importance",
             "matching_benefit_importance",
         ]
         fieldnames = [
@@ -1153,8 +1408,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "employer_name",
             "business_name",
             "enumerator_name",
+            "protocol_version",
             "treatment_arm",
-            "reveal_type",
             "mode",
             *characteristic_fields,
             "characteristics_created_at",
@@ -1181,8 +1436,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                   e.name AS employer_name,
                   e.business_name,
                   u.name AS enumerator_name,
+                  s.protocol_version,
                   s.treatment_arm,
-                  s.reveal_type,
                   s.mode,
                   s.candidate_set_id,
                   s.requested_candidate_count,
@@ -1196,11 +1451,14 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                   c.id AS candidate_id,
                   c.code AS candidate_code,
                   r.stage,
+                  r.show_productivity,
+                  r.show_additional_information,
                   r.wage_value AS perceived_typical_monthly_pay,
                   r.hire_interest,
                   r.selected_reasons_json,
                   r.ranked_reasons_json,
                   r.reason_scores_json AS reason_importance_scores_json,
+                  r.other_reason_text,
                   r.conditional_wage_offer AS hypothetical_monthly_salary_offer,
                   r.submitted_at,
                   s.created_at AS session_created_at,
@@ -1231,8 +1489,8 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "employer_name",
             "business_name",
             "enumerator_name",
+            "protocol_version",
             "treatment_arm",
-            "reveal_type",
             "mode",
             "candidate_set_id",
             "requested_candidate_count",
@@ -1243,11 +1501,14 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
             "candidate_id",
             "candidate_code",
             "stage",
+            "show_productivity",
+            "show_additional_information",
             "perceived_typical_monthly_pay",
             "hire_interest",
             "selected_reasons_json",
             "ranked_reasons_json",
             "reason_importance_scores_json",
+            "other_reason_text",
             "hypothetical_monthly_salary_offer",
             "submitted_at",
             "session_created_at",
@@ -1263,7 +1524,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
 def main() -> None:
     init_database()
     host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "8000"))
+    port = int(os.environ.get("PORT", "8001"))
     server = ThreadingHTTPServer((host, port), ExperimentHandler)
     local_url = f"http://localhost:{port}"
     print(f"Social Media / Digital Admin Preference running at {local_url}")

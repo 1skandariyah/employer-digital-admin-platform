@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   session_code TEXT UNIQUE,
   employer_id INTEGER NOT NULL REFERENCES employers(id),
   enumerator_id INTEGER NOT NULL REFERENCES users(id),
-  treatment_arm TEXT NOT NULL CHECK (treatment_arm IN ('transparent', 'hidden')),
-  reveal_type TEXT NOT NULL CHECK (reveal_type IN ('productivity', 'placebo')),
+  protocol_version TEXT NOT NULL DEFAULT 'v2',
+  treatment_arm TEXT NOT NULL CHECK (treatment_arm IN ('hidden', 'hidden_placebo', 'transparent', 'transparent_placebo')),
   candidate_set_id INTEGER NOT NULL REFERENCES candidate_sets(id),
   requested_candidate_count INTEGER NOT NULL DEFAULT 20,
   mode TEXT NOT NULL CHECK (mode IN ('online', 'offline')),
@@ -72,19 +72,41 @@ CREATE TABLE IF NOT EXISTS reason_options (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS session_reason_options (
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  reason_option_id INTEGER NOT NULL REFERENCES reason_options(id),
+  applies_to TEXT NOT NULL CHECK (applies_to IN ('yes', 'no')),
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  PRIMARY KEY (session_id, reason_option_id)
+);
+
 CREATE TABLE IF NOT EXISTS responses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   candidate_id INTEGER NOT NULL REFERENCES candidates(id),
   stage TEXT NOT NULL CHECK (stage IN ('transparent', 'pre', 'post')),
+  show_productivity INTEGER NOT NULL CHECK (show_productivity IN (0, 1)),
+  show_additional_information INTEGER NOT NULL CHECK (show_additional_information IN (0, 1)),
   wage_value INTEGER NOT NULL,
   hire_interest TEXT NOT NULL CHECK (hire_interest IN ('yes', 'no')),
   selected_reasons_json TEXT NOT NULL,
   ranked_reasons_json TEXT NOT NULL,
   reason_scores_json TEXT NOT NULL DEFAULT '{}',
+  other_reason_text TEXT,
   conditional_wage_offer INTEGER NOT NULL,
   started_at TEXT,
   submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(session_id, candidate_id, stage)
+);
+
+CREATE TABLE IF NOT EXISTS response_drafts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  candidate_id INTEGER NOT NULL REFERENCES candidates(id),
+  stage TEXT NOT NULL CHECK (stage IN ('transparent', 'pre', 'post')),
+  response_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(session_id, candidate_id, stage)
 );
 
@@ -104,4 +126,5 @@ CREATE TABLE IF NOT EXISTS randomization_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id);
+CREATE INDEX IF NOT EXISTS idx_response_drafts_session ON response_drafts(session_id);
 CREATE INDEX IF NOT EXISTS idx_session_candidates_session ON session_candidates(session_id, order_index);

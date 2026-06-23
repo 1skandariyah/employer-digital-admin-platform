@@ -42,9 +42,11 @@ class ProfileFieldTests(unittest.TestCase):
         )
 
         self.assertNotIn("average_score", high_school)
-        self.assertEqual(high_school["education"], "Vocational high school, multimedia major")
+        self.assertEqual(high_school["education_level"], "Vocational high school")
+        self.assertEqual(high_school["education_major"], "multimedia major")
         self.assertNotIn("gpa", diploma)
-        self.assertEqual(diploma["education"], "Diploma, information systems")
+        self.assertEqual(diploma["education_level"], "Diploma")
+        self.assertEqual(diploma["education_major"], "information systems")
 
 
 if __name__ == "__main__":
