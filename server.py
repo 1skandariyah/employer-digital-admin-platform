@@ -50,7 +50,7 @@ def age_from_date_of_birth(date_of_birth: str, as_of: date | None = None) -> str
     as_of = as_of or date.today()
     born = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
     years, months = years_months_between(born, as_of)
-    return f"{years} years {months} months"
+    return f"{years} tahun {months} bulan"
 
 
 def deterministic_left_skewed_value(
@@ -79,7 +79,7 @@ def deterministic_left_skewed_value(
 
 def score_field_for_education(code: str, education: str) -> tuple[str, float]:
     education_lower = education.lower()
-    if "diploma" in education_lower or "bachelor" in education_lower:
+    if "diploma" in education_lower or "bachelor" in education_lower or "sarjana" in education_lower:
         return "gpa", deterministic_left_skewed_value(f"{code}:gpa", 0, 4, 3.0, 2)
     return "average_score", deterministic_left_skewed_value(f"{code}:average_score", 0, 100, 75, 1)
 
@@ -106,6 +106,7 @@ def normalize_baseline(code: str, baseline: dict) -> dict:
     for key in [
         "gender",
         "date_of_birth",
+        "age_label",
         "current_address",
         "education",
         score_key,
@@ -125,12 +126,15 @@ def baseline_for_display(code: str, baseline: dict) -> dict:
         if key == "date_of_birth":
             display["age"] = age_from_date_of_birth(str(value))
             continue
+        if key == "age_label":
+            display["age"] = value
+            continue
         if key in {"current_address", "average_score", "gpa"}:
             continue
         if key == "education":
             level, separator, major = str(value).partition(",")
             display["education_level"] = level.strip()
-            display["education_major"] = major.strip() if separator and major.strip() else "Not specified"
+            display["education_major"] = major.strip() if separator and major.strip() else "Belum diisi"
             continue
         display[key] = value
     return display
@@ -152,11 +156,13 @@ def candidate_row_to_payload(row: dict) -> tuple[str, str, str, str, str]:
     baseline = {
         "gender": (row.get("gender") or "").strip(),
         "date_of_birth": (row.get("date_of_birth") or "").strip(),
+        "age_label": (row.get("age_label") or "").strip(),
         "current_address": (row.get("current_address") or "").strip(),
         "education": (row.get("education") or "").strip(),
         "relevant_experience": (row.get("relevant_experience") or "").strip(),
         "skills": (row.get("skills") or "").strip(),
     }
+    baseline = {key: value for key, value in baseline.items() if value}
     if row.get("average_score"):
         baseline["average_score"] = float(row["average_score"])
     if row.get("gpa"):
@@ -310,6 +316,11 @@ def migrate_database(conn: sqlite3.Connection) -> None:
     for session in conn.execute("SELECT id FROM sessions"):
         snapshot_session_reason_options(conn, session["id"])
 
+    configured_reasons = {(applies_to, label) for applies_to, label, _ in REASON_OPTIONS}
+    for reason in conn.execute("SELECT id, applies_to, label FROM reason_options"):
+        if (reason["applies_to"], reason["label"]) not in configured_reasons:
+            conn.execute("UPDATE reason_options SET active = 0 WHERE id = ?", (reason["id"],))
+
     for applies_to, label, sort_order in REASON_OPTIONS:
         existing = conn.execute(
             "SELECT id FROM reason_options WHERE applies_to = ? AND label = ?",
@@ -322,7 +333,7 @@ def migrate_database(conn: sqlite3.Connection) -> None:
             )
         else:
             conn.execute(
-                "UPDATE reason_options SET sort_order = ? WHERE id = ?",
+                "UPDATE reason_options SET active = 1, sort_order = ? WHERE id = ?",
                 (sort_order, existing["id"]),
             )
 
@@ -332,7 +343,7 @@ def migrate_database(conn: sqlite3.Connection) -> None:
         "C-103": "2 years 0 months",
         "C-104": "0 years 6 months",
     }
-    for row in conn.execute("SELECT code, baseline_json, productivity_json FROM candidates"):
+    for row in conn.execute("SELECT code, baseline_json, productivity_json, placebo_json FROM candidates"):
         baseline = json.loads(row["baseline_json"])
         baseline["relevant_experience"] = experience_by_code.get(row["code"], baseline.get("relevant_experience", "0 years 0 months"))
         baseline = normalize_baseline(row["code"], baseline)
@@ -340,14 +351,18 @@ def migrate_database(conn: sqlite3.Connection) -> None:
             "UPDATE candidates SET baseline_json = ? WHERE code = ?",
             (json.dumps(baseline), row["code"]),
         )
-        additional_information = ADDITIONAL_INFORMATION_BY_CODE.get(
-            row["code"], "Additional information not yet configured"
-        )
-        placebo = {"additional_information": additional_information}
-        conn.execute(
-            "UPDATE candidates SET placebo_json = ? WHERE code = ?",
-            (json.dumps(placebo), row["code"]),
-        )
+        existing_placebo = json.loads(row["placebo_json"] or "{}")
+        if (
+            row["code"] in ADDITIONAL_INFORMATION_BY_CODE
+            and not existing_placebo.get("additional_information")
+        ):
+            placebo = {
+                "additional_information": ADDITIONAL_INFORMATION_BY_CODE[row["code"]]
+            }
+            conn.execute(
+                "UPDATE candidates SET placebo_json = ? WHERE code = ?",
+                (json.dumps(placebo), row["code"]),
+            )
         productivity = json.loads(row["productivity_json"] or "{}")
         if row["code"] in PRODUCTIVITY_BY_CODE and should_replace_placeholder_productivity(productivity):
             conn.execute(

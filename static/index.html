@@ -1,52 +1,52 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Social Media / Digital Admin Preference</title>
-    <link rel="stylesheet" href="/styles.css?v=8">
+    <title>Preferensi Admin/Manajer Media Sosial</title>
+    <link rel="stylesheet" href="/styles.css?v=10">
   </head>
   <body>
     <header class="topbar">
       <div>
-        <h1>Social Media Manager / Admin Preference</h1>
-        <p>Candidate profile review for social media admin roles.</p>
+        <h1>Preferensi Admin/Manajer Media Sosial</h1>
+        <p>Penilaian profil kandidat untuk posisi admin media sosial.</p>
       </div>
       <div id="experiment-header-actions" class="header-actions hidden">
-        <button class="secondary home-passcode" type="button">Home</button>
+        <button class="secondary home-passcode" type="button">Beranda</button>
       </div>
     </header>
 
     <main>
       <section id="landing" class="landing-grid">
         <section class="panel">
-          <h2>Open Existing Session</h2>
-          <p class="muted">Enter the session code provided to you.</p>
+          <h2>Buka Sesi yang Sudah Ada</h2>
+          <p class="muted">Masukkan kode sesi yang diberikan kepada Anda.</p>
           <form id="respondent-entry-form">
             <label>
-              Session code
-              <input name="sessionId" required placeholder="Example: PILOT-A1">
+              Kode sesi
+              <input name="sessionId" required placeholder="Contoh: PILOT-A1">
             </label>
-            <button type="submit">Start</button>
+            <button type="submit">Mulai</button>
             <p id="respondent-entry-status" class="muted"></p>
           </form>
         </section>
 
         <section class="panel">
-          <h2>Create New Session</h2>
-          <p class="muted">Set up a new guided employer session.</p>
-          <button id="quick-create-session" type="button">Create new session</button>
+          <h2>Buat Sesi Baru</h2>
+          <p class="muted">Buat sesi terpandu baru untuk pemilik/pelaku usaha.</p>
+          <button id="quick-create-session" type="button">Buat sesi baru</button>
         </section>
 
         <section class="panel">
-          <h2>Staff Access</h2>
-          <p class="muted">For session staff managing scheduled reviews.</p>
+          <h2>Akses Staf</h2>
+          <p class="muted">Untuk staf yang mengelola sesi penilaian terjadwal.</p>
           <form id="enumerator-login-form">
             <label>
               Passcode
               <input name="passcode" type="password" inputmode="numeric" autocomplete="off" required>
             </label>
-            <button type="submit">Open Staff Dashboard</button>
+            <button type="submit">Buka Dashboard Staf</button>
             <p id="enumerator-login-status" class="muted"></p>
           </form>
         </section>
@@ -54,84 +54,84 @@
 
       <section id="dashboard" class="layout hidden">
         <aside class="panel">
-          <h2>Create Session</h2>
+          <h2>Buat Sesi</h2>
           <form id="session-form">
             <label>
-              Employer name
-              <input name="employerName" required placeholder="Respondent name">
+              Nama responden
+              <input name="employerName" required placeholder="Nama responden">
             </label>
             <label>
-              Session code
-              <input name="sessionCode" placeholder="Optional, e.g. PILOT-A1">
+              Kode sesi
+              <input name="sessionCode" placeholder="Opsional, mis. PILOT-A1">
             </label>
             <label>
-              Business name
-              <input name="businessName" placeholder="MSME name">
+              Nama usaha
+              <input name="businessName" placeholder="Nama UMKM">
             </label>
             <label>
-              Contact
-              <input name="contact" placeholder="Phone or email">
+              Kontak
+              <input name="contact" placeholder="Nomor telepon atau email">
             </label>
             <label>
               Enumerator
               <select name="enumeratorId" required></select>
             </label>
             <label>
-              Treatment arm
+              Kelompok perlakuan
               <select name="treatmentArm" required>
-                <option value="hidden">Hidden</option>
-                <option value="hidden_placebo">Hidden + additional information</option>
-                <option value="transparent">Transparent</option>
-                <option value="transparent_placebo">Transparent + additional information</option>
+                <option value="hidden">Tersembunyi</option>
+                <option value="hidden_placebo">Tersembunyi + informasi tambahan</option>
+                <option value="transparent">Terbuka</option>
+                <option value="transparent_placebo">Terbuka + informasi tambahan</option>
               </select>
             </label>
             <label>
-              Candidate set
+              Set kandidat
               <select name="candidateSetId" required></select>
             </label>
             <label>
-              Number of candidates to review
+              Jumlah kandidat yang dinilai
               <select name="candidateLimit" required>
-                <option value="3">3 candidates</option>
-                <option value="5">5 candidates</option>
-                <option value="10">10 candidates</option>
-                <option value="15">15 candidates</option>
-                <option value="20" selected>20 candidates</option>
+                <option value="3">3 kandidat</option>
+                <option value="5">5 kandidat</option>
+                <option value="10">10 kandidat</option>
+                <option value="15">15 kandidat</option>
+                <option value="20" selected>20 kandidat</option>
               </select>
             </label>
             <label>
-              Delivery mode
+              Mode pelaksanaan
               <select name="mode" required>
-                <option value="online">Online guided</option>
-                <option value="offline">Offline guided</option>
+                <option value="online">Terpandu online</option>
+                <option value="offline">Terpandu offline</option>
               </select>
             </label>
             <label>
-              Randomization seed
-              <input name="randomizationSeed" inputmode="numeric" placeholder="Optional">
+              Seed randomisasi
+              <input name="randomizationSeed" inputmode="numeric" placeholder="Opsional">
             </label>
-            <button type="submit">Create guided session</button>
+            <button type="submit">Buat sesi terpandu</button>
             <p id="session-create-status" class="muted" aria-live="polite"></p>
           </form>
           <section class="candidate-tools">
-            <h2>Candidate Data</h2>
-            <a class="button secondary" href="/api/candidates.csv">Download CSV</a>
+            <h2>Data Kandidat</h2>
+            <a class="button secondary" href="/api/candidates.csv">Unduh CSV</a>
             <label>
-              Import edited CSV
+              Impor CSV yang telah diedit
               <input id="candidate-csv" type="file" accept=".csv,text/csv">
             </label>
-            <button id="import-candidates" class="secondary" type="button">Import CSV</button>
+            <button id="import-candidates" class="secondary" type="button">Impor CSV</button>
             <p id="candidate-import-status" class="muted"></p>
           </section>
         </aside>
 
         <section class="panel">
           <div class="section-heading">
-            <h2>Enumerator Dashboard</h2>
+            <h2>Dashboard Enumerator</h2>
             <div class="dashboard-actions">
-              <a class="button secondary" href="/api/export/responses.csv">Candidate response CSV</a>
-              <a class="button secondary" href="/api/export/employer-characteristics.csv">Employer data CSV</a>
-              <button id="refresh-sessions" class="secondary" type="button">Refresh</button>
+              <a class="button secondary" href="/api/export/responses.csv">CSV respons kandidat</a>
+              <a class="button secondary" href="/api/export/employer-characteristics.csv">CSV data pemilik/pelaku usaha</a>
+              <button id="refresh-sessions" class="secondary" type="button">Muat ulang</button>
             </div>
           </div>
           <div id="session-list" class="session-list"></div>
@@ -153,51 +153,51 @@
         <section class="productivity-block"></section>
         <form class="response-form">
           <fieldset class="question-wage">
-            <legend>Typical monthly pay</legend>
+            <legend>Perkiraan gaji bulanan umum</legend>
             <label>
-              Based on this profile, what monthly salary do you think a candidate with a similar profile would typically receive for a social media admin or social media manager position?
-              <input name="wageValue" type="number" inputmode="numeric" min="0" step="1" required placeholder="Typical monthly salary in IDR">
+              Berdasarkan profil ini, menurut Anda berapa gaji bulanan yang umumnya diterima kandidat dengan profil serupa untuk posisi admin media sosial atau manajer media sosial?
+              <input name="wageValue" type="number" inputmode="numeric" min="0" step="1" required placeholder="Gaji bulanan umum dalam IDR">
             </label>
-            <button class="secondary question-next wage-next" type="button" disabled>Next</button>
+            <button class="secondary question-next wage-next" type="button" disabled>Lanjut</button>
           </fieldset>
           <fieldset class="progressive-fieldset progressive-concealed question-hiring" disabled>
-            <legend>Hiring interest</legend>
-            <p class="question-text">Based on this profile, are you interested in hiring this candidate?</p>
+            <legend>Minat untuk merekrut</legend>
+            <p class="question-text">Berdasarkan profil ini, apakah Anda berminat untuk merekrut kandidat ini?</p>
             <div class="choice-row">
-              <label><input type="radio" name="hireInterest" value="yes" required> Yes</label>
-              <label><input type="radio" name="hireInterest" value="no" required> No</label>
+              <label><input type="radio" name="hireInterest" value="yes" required> Ya</label>
+              <label><input type="radio" name="hireInterest" value="no" required> Tidak</label>
             </div>
           </fieldset>
           <fieldset class="reasons-fieldset progressive-fieldset progressive-concealed question-reasons" disabled>
-            <legend class="reasons-legend">Reason for hiring / not hiring</legend>
+            <legend class="reasons-legend">Alasan merekrut / tidak merekrut</legend>
             <p class="muted">
-              Use the sliders to indicate how important each factor is to your decision: 0 means
-              the factor is totally irrelevant, while 100 means it is very important.
+              Gunakan slider untuk menunjukkan seberapa penting setiap faktor dalam keputusan Anda:
+              0 berarti faktor tersebut sama sekali tidak relevan, sedangkan 100 berarti sangat penting.
             </p>
             <div class="reason-options"></div>
             <div class="ranked-reasons"></div>
-            <button class="secondary question-next reasons-done" type="button" disabled>Done</button>
+            <button class="secondary question-next reasons-done" type="button" disabled>Selesai</button>
           </fieldset>
           <fieldset class="progressive-fieldset progressive-concealed question-offer" disabled>
-            <legend>Your monthly wage offer</legend>
+            <legend>Tawaran gaji bulanan Anda</legend>
             <label>
-              Suppose your business wanted to hire this candidate to manage its social media. What monthly salary would your business be willing to offer this candidate?
-              <input name="conditionalWageOffer" type="number" inputmode="numeric" min="0" step="1" required placeholder="Your monthly offer in IDR">
+              Misalkan usaha Anda ingin merekrut kandidat ini untuk mengelola media sosial. Berapa gaji bulanan yang bersedia ditawarkan usaha Anda kepada kandidat ini?
+              <input name="conditionalWageOffer" type="number" inputmode="numeric" min="0" step="1" required placeholder="Tawaran bulanan Anda dalam IDR">
             </label>
-            <button class="secondary question-next offer-next" type="button" disabled>Next</button>
+            <button class="secondary question-next offer-next" type="button" disabled>Lanjut</button>
           </fieldset>
           <div class="nav-actions">
-            <button class="secondary previous-step" type="button">Previous</button>
+            <button class="secondary previous-step" type="button">Sebelumnya</button>
             <div class="candidate-nav-actions">
               <span class="draft-status" aria-live="polite"></span>
-              <button class="secondary save-candidate-draft" type="button">Save draft</button>
-              <button class="save-candidate-response" type="submit" disabled>Save and continue</button>
+              <button class="secondary save-candidate-draft" type="button">Simpan sementara</button>
+              <button class="save-candidate-response" type="submit" disabled>Simpan dan lanjutkan</button>
             </div>
           </div>
         </form>
       </article>
     </template>
 
-    <script src="/app.js?v=11"></script>
+    <script src="/app.js?v=17"></script>
   </body>
 </html>

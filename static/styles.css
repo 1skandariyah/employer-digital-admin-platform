@@ -423,9 +423,28 @@ legend {
   min-width: 0;
 }
 
+.performance-guide-example {
+  background: #ffffff;
+  border: 1px solid #d6e5e5;
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.performance-guide-example h3 {
+  color: var(--accent-dark);
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.performance-guide-example > p {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 10px 0 0;
+}
+
 .marker-callout {
   color: var(--accent-dark);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   left: var(--guide-position);
   position: absolute;
@@ -506,6 +525,17 @@ legend {
   display: grid;
   font-size: 10px;
   grid-template-columns: repeat(3, 1fr);
+}
+
+.guide-scale-labels > span {
+  display: grid;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.guide-scale-labels strong {
+  color: var(--accent-dark);
+  font-size: 1.08em;
 }
 
 .guide-scale-labels span:nth-child(2) {
@@ -1221,15 +1251,15 @@ legend {
   }
 
   .performance-reading-key p {
-    font-size: 13px;
-    line-height: 1.3;
-    margin-bottom: 5px;
+    font-size: 15px;
+    line-height: 1.4;
+    margin-bottom: 7px;
   }
 
   .benchmark-summary,
   .reading-key-points {
-    font-size: 10px;
-    line-height: 1.2;
+    font-size: 15px;
+    line-height: 1.4;
   }
 
   .benchmark-summary {
@@ -1237,31 +1267,28 @@ legend {
   }
 
   .guide-metric {
-    margin-top: 5px;
+    margin-top: 8px;
   }
 
-  .performance-guide-examples {
-    gap: 8px;
+  .guide-metric p {
+    font-size: 14px;
   }
 
-  .performance-guide-heading {
+  .guide-scale-labels {
+    font-size: 12px;
+  }
+
+  .performance-guide-example {
+    padding: 10px 12px;
+  }
+
+  .performance-guide-example h3 {
+    font-size: 15px;
+  }
+
+  .performance-guide-example > p {
     font-size: 13px;
-    margin: 0 0 -3px;
-  }
-
-  .performance-guide-card {
-    padding: 7px 9px;
-  }
-
-  .performance-guide-card h3 {
-    font-size: 13px;
-    margin-bottom: 1px;
-  }
-
-  .performance-guide-card > p {
-    font-size: 11px;
-    line-height: 1.25;
-    margin-top: 5px;
+    line-height: 1.35;
   }
 
   .characteristics-page {

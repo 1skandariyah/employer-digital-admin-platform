@@ -19,7 +19,7 @@ class ProfileFieldTests(unittest.TestCase):
         display = baseline_for_display("C-101", baseline)
         keys = list(display.keys())
 
-        self.assertEqual(age_from_date_of_birth("2002-04-12", date(2026, 5, 25)), "24 years 1 months")
+        self.assertEqual(age_from_date_of_birth("2002-04-12", date(2026, 5, 25)), "24 tahun 1 bulan")
         self.assertNotIn("date_of_birth", display)
         self.assertIn("age", display)
         self.assertNotIn("place_of_birth", display)

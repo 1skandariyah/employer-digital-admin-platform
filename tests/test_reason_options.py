@@ -10,13 +10,13 @@ class ReasonOptionTests(unittest.TestCase):
         self.assertEqual(
             labels,
             [
-                "Education fits the role",
-                "Relevant experience is sufficient",
-                "Skills are suitable for the role",
-                "Expected productivity is high",
-                "Task performance is impressive",
-                "Additional Information suggests good fit",
-                "Other reason (please specify)",
+                "Pendidikan sesuai dengan posisi ini",
+                "Pengalaman relevan mencukupi",
+                "Keahlian sesuai dengan posisi ini",
+                "Perkiraan produktivitas tinggi",
+                "Kinerja tugas mengesankan",
+                "Informasi Tambahan menunjukkan kecocokan yang baik",
+                "Alasan lain (sebutkan)",
             ],
         )
 
@@ -26,14 +26,14 @@ class ReasonOptionTests(unittest.TestCase):
         self.assertEqual(
             labels,
             [
-                "Education does not fit the role",
-                "Candidate may be overqualified for this role",
-                "Insufficient relevant experience",
-                "Skills look too limited",
-                "Expected productivity is too low",
-                "Task performance is disappointing",
-                "Additional Information suggests poor fit",
-                "Other reason (please specify)",
+                "Kandidat mungkin kurang memenuhi kualifikasi",
+                "Kandidat mungkin terlalu tinggi kualifikasinya",
+                "Pengalaman relevan kurang mencukupi",
+                "Keahlian terlihat terlalu terbatas",
+                "Perkiraan produktivitas terlalu rendah",
+                "Kinerja tugas mengecewakan",
+                "Informasi Tambahan menunjukkan kecocokan yang kurang baik",
+                "Alasan lain (sebutkan)",
             ],
         )
 

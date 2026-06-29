@@ -1,5 +1,11 @@
+import csv
 import json
 import sqlite3
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+CANDIDATE_SOURCE_CSV = BASE_DIR / "data" / "candidates_150.csv"
 
 
 PRODUCTIVITY_BY_CODE = {
@@ -82,22 +88,92 @@ ADDITIONAL_INFORMATION_BY_CODE = {
 }
 
 REASON_OPTIONS = [
-    ("yes", "Education fits the role", 1),
-    ("yes", "Relevant experience is sufficient", 2),
-    ("yes", "Skills are suitable for the role", 3),
-    ("yes", "Expected productivity is high", 4),
-    ("yes", "Task performance is impressive", 5),
-    ("yes", "Additional Information suggests good fit", 6),
-    ("yes", "Other reason (please specify)", 7),
-    ("no", "Education does not fit the role", 1),
-    ("no", "Candidate may be overqualified for this role", 2),
-    ("no", "Insufficient relevant experience", 3),
-    ("no", "Skills look too limited", 4),
-    ("no", "Expected productivity is too low", 5),
-    ("no", "Task performance is disappointing", 6),
-    ("no", "Additional Information suggests poor fit", 7),
-    ("no", "Other reason (please specify)", 8),
+    ("yes", "Pendidikan sesuai dengan posisi ini", 1),
+    ("yes", "Pengalaman relevan mencukupi", 2),
+    ("yes", "Keahlian sesuai dengan posisi ini", 3),
+    ("yes", "Perkiraan produktivitas tinggi", 4),
+    ("yes", "Kinerja tugas mengesankan", 5),
+    ("yes", "Informasi Tambahan menunjukkan kecocokan yang baik", 6),
+    ("yes", "Alasan lain (sebutkan)", 7),
+    ("no", "Kandidat mungkin kurang memenuhi kualifikasi", 1),
+    ("no", "Kandidat mungkin terlalu tinggi kualifikasinya", 2),
+    ("no", "Pengalaman relevan kurang mencukupi", 3),
+    ("no", "Keahlian terlihat terlalu terbatas", 4),
+    ("no", "Perkiraan produktivitas terlalu rendah", 5),
+    ("no", "Kinerja tugas mengecewakan", 6),
+    ("no", "Informasi Tambahan menunjukkan kecocokan yang kurang baik", 7),
+    ("no", "Alasan lain (sebutkan)", 8),
 ]
+
+
+def candidate_from_csv_row(row: dict) -> dict:
+    baseline = {
+        "gender": (row.get("gender") or "").strip(),
+        "age_label": (row.get("age_label") or "").strip(),
+        "education": (row.get("education") or "").strip(),
+        "relevant_experience": (row.get("relevant_experience") or "").strip(),
+        "skills": (row.get("skills") or "").strip(),
+    }
+    baseline = {key: value for key, value in baseline.items() if value}
+    productivity = {
+        "reach_indicator": (row.get("reach_indicator") or "").strip(),
+        "interaction_indicator": (row.get("interaction_indicator") or "").strip(),
+        "benchmark": (row.get("benchmark") or "").strip(),
+    }
+    placebo = {
+        "additional_information": (row.get("additional_information") or "").strip(),
+    }
+    return {
+        "code": (row.get("code") or "").strip(),
+        "pseudonym": (row.get("pseudonym") or "").strip(),
+        "baseline": baseline,
+        "productivity": productivity,
+        "placebo": placebo,
+    }
+
+
+def load_candidate_source() -> list[dict]:
+    if not CANDIDATE_SOURCE_CSV.exists():
+        return []
+    with CANDIDATE_SOURCE_CSV.open(newline="", encoding="utf-8-sig") as file:
+        return [candidate_from_csv_row(row) for row in csv.DictReader(file)]
+
+
+def insert_candidate_set(conn: sqlite3.Connection, candidates: list[dict]) -> None:
+    for candidate in candidates:
+        conn.execute(
+            """
+            INSERT INTO candidates (code, pseudonym, baseline_json, productivity_json, placebo_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                candidate["code"],
+                candidate["pseudonym"],
+                json.dumps(candidate["baseline"]),
+                json.dumps(candidate["productivity"]),
+                json.dumps(candidate["placebo"]),
+            ),
+        )
+
+    conn.execute(
+        "INSERT INTO candidate_sets (name, notes) VALUES (?, ?)",
+        (
+            "Set 150 kandidat seimbang",
+            "Kumpulan profil hipotetis yang diseimbangkan berdasarkan pendidikan dan kelompok produktivitas.",
+        ),
+    )
+    set_id = conn.execute(
+        "SELECT id FROM candidate_sets WHERE name = ?",
+        ("Set 150 kandidat seimbang",),
+    ).fetchone()[0]
+    candidate_ids = [
+        row[0]
+        for row in conn.execute("SELECT id FROM candidates ORDER BY code")
+    ]
+    conn.executemany(
+        "INSERT INTO candidate_set_members (candidate_set_id, candidate_id, position) VALUES (?, ?, ?)",
+        [(set_id, candidate_id, idx) for idx, candidate_id in enumerate(candidate_ids, start=1)],
+    )
 
 
 def seed_database(conn: sqlite3.Connection) -> None:
@@ -113,6 +189,16 @@ def seed_database(conn: sqlite3.Connection) -> None:
             ("Enumerator B", "enumerator"),
         ],
     )
+
+    csv_candidates = load_candidate_source()
+    if csv_candidates:
+        insert_candidate_set(conn, csv_candidates)
+        conn.executemany(
+            "INSERT INTO reason_options (applies_to, label, sort_order) VALUES (?, ?, ?)",
+            REASON_OPTIONS,
+        )
+        conn.commit()
+        return
 
     candidates = [
         {

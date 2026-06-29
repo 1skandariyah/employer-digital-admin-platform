@@ -26,34 +26,34 @@ const candidateImportStatus = document.querySelector("#candidate-import-status")
 
 const BENCHMARK_RANGES = {
   reach_indicator: {
-    min: 320,
-    median: 950,
-    max: 4100,
-    unit: "accounts reached per post",
+    min: 100,
+    median: 500,
+    max: 2500,
+    unit: "akun dijangkau per postingan",
   },
   interaction_indicator: {
-    min: 12,
-    median: 54,
-    max: 280,
-    unit: "interactions per post",
+    min: 3,
+    median: 25,
+    max: 150,
+    unit: "interaksi per postingan",
   },
 };
 
 const CONDITIONAL_REASON_LABELS = {
   productivity: {
-    yes: "Task performance is impressive",
-    no: "Task performance is disappointing",
+    yes: "Kinerja tugas mengesankan",
+    no: "Kinerja tugas mengecewakan",
   },
   placebo: {
-    yes: "Additional Information suggests good fit",
-    no: "Additional Information suggests poor fit",
+    yes: "Informasi Tambahan menunjukkan kecocokan yang baik",
+    no: "Informasi Tambahan menunjukkan kecocokan yang kurang baik",
   },
 };
 
 const CONDITIONAL_REASON_LABEL_SET = new Set(
   Object.values(CONDITIONAL_REASON_LABELS).flatMap((labels) => Object.values(labels))
 );
-const OTHER_REASON_LABEL = "Other reason (please specify)";
+const OTHER_REASON_LABEL = "Alasan lain (sebutkan)";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -61,8 +61,8 @@ async function api(path, options = {}) {
     ...options,
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || "Request failed");
+    const error = await response.json().catch(() => ({ error: "Permintaan gagal" }));
+    throw new Error(error.error || "Permintaan gagal");
   }
   return response.json();
 }
@@ -76,15 +76,15 @@ function moneyToInteger(value) {
 }
 
 function formatStatus(session) {
-  return `${session.response_count}/${session.expected_response_count} responses`;
+  return `${session.response_count}/${session.expected_response_count} respons`;
 }
 
 function treatmentLabel(treatmentArm) {
   const labels = {
-    hidden: "Hidden",
-    hidden_placebo: "Hidden + additional information",
-    transparent: "Transparent",
-    transparent_placebo: "Transparent + additional information",
+    hidden: "Tersembunyi",
+    hidden_placebo: "Tersembunyi + informasi tambahan",
+    transparent: "Terbuka",
+    transparent_placebo: "Terbuka + informasi tambahan",
   };
   return labels[treatmentArm] || treatmentArm;
 }
@@ -124,7 +124,7 @@ async function loadSessions() {
   const { sessions } = await api("/api/sessions");
   sessionList.innerHTML = "";
   if (sessions.length === 0) {
-    sessionList.innerHTML = "<p class=\"muted\">No sessions yet.</p>";
+    sessionList.innerHTML = "<p class=\"muted\">Belum ada sesi.</p>";
     return;
   }
 
@@ -135,20 +135,20 @@ async function loadSessions() {
       <div>
         <h3>${session.employer_name}</h3>
         <p class="meta">
-          ${session.business_name || "No business name"} - ${session.enumerator_name} -
+          ${session.business_name || "Nama usaha belum diisi"} - ${session.enumerator_name} -
           ${treatmentLabel(session.treatment_arm)} - ${session.mode} -
-          ${session.candidate_count}/${session.requested_candidate_count} candidates
+          ${session.candidate_count}/${session.requested_candidate_count} kandidat
         </p>
         <p class="meta">
-          Session code: <strong>${sessionLocator(session)}</strong> -
-          <a href="${sessionUrl(session)}" target="_blank" rel="noreferrer">Respondent link</a>
+          Kode sesi: <strong>${sessionLocator(session)}</strong> -
+          <a href="${sessionUrl(session)}" target="_blank" rel="noreferrer">Tautan responden</a>
         </p>
         <span class="status">${session.status} - ${formatStatus(session)}</span>
       </div>
       <div class="session-actions">
-        <button class="secondary rename-session-code" type="button">Rename code</button>
-        <button class="secondary delete-session" type="button">Delete session</button>
-        <button class="open-session" type="button">Open session</button>
+        <button class="secondary rename-session-code" type="button">Ubah kode</button>
+        <button class="secondary delete-session" type="button">Hapus sesi</button>
+        <button class="open-session" type="button">Buka sesi</button>
       </div>
     `;
     row.querySelector(".open-session").addEventListener("click", () => openSession(session.id, { enumeratorControls: true }));
@@ -160,7 +160,7 @@ async function loadSessions() {
 
 async function renameSessionCode(session) {
   const currentCode = sessionLocator(session);
-  const newCode = window.prompt("Enter new session code", currentCode);
+  const newCode = window.prompt("Masukkan kode sesi baru", currentCode);
   if (newCode === null) {
     return;
   }
@@ -177,7 +177,7 @@ async function renameSessionCode(session) {
 
 async function deleteSession(session) {
   const confirmed = window.confirm(
-    `Delete session for ${session.employer_name}? This removes saved responses and randomization records for this session.`
+    `Hapus sesi untuk ${session.employer_name}? Ini akan menghapus respons tersimpan dan catatan randomisasi untuk sesi ini.`
   );
   if (!confirmed) {
     return;
@@ -272,7 +272,7 @@ function previousStep() {
   }
   const currentStep = state.session.flow[state.stepIndex];
   if (currentStep.kind === "hidden_reveal_productivity_definition") {
-    requestPasscode("Staff Passcode", async () => {
+    requestPasscode("Passcode Staf", async () => {
       state.stepIndex -= 1;
       renderStep();
     });
@@ -287,11 +287,11 @@ function nextStep() {
   renderStep();
 }
 
-function navigationButtons(nextLabel = "Continue", options = {}) {
+function navigationButtons(nextLabel = "Lanjut", options = {}) {
   const previousDisabled = options.disablePrevious ? "disabled" : "";
   return `
     <div class="nav-actions">
-      <button class="secondary previous-screen" type="button" ${previousDisabled}>Previous</button>
+      <button class="secondary previous-screen" type="button" ${previousDisabled}>Sebelumnya</button>
       <button class="continue-screen" type="button">${nextLabel}</button>
     </div>
   `;
@@ -321,7 +321,7 @@ function requestPasscode(title, onSuccess) {
     "beforeend",
     `
       <div class="passcode-backdrop" role="presentation">
-        <form class="passcode-dialog" aria-label="Enumerator passcode">
+        <form class="passcode-dialog" aria-label="Passcode enumerator">
           <h2>${title}</h2>
           <label>
             Passcode
@@ -329,8 +329,8 @@ function requestPasscode(title, onSuccess) {
           </label>
           <p class="passcode-error muted"></p>
           <div class="nav-actions">
-            <button class="secondary cancel-passcode" type="button">Cancel</button>
-            <button type="submit">Continue</button>
+            <button class="secondary cancel-passcode" type="button">Batal</button>
+            <button type="submit">Lanjut</button>
           </div>
         </form>
       </div>
@@ -343,7 +343,7 @@ function requestPasscode(title, onSuccess) {
   dialog.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (input.value !== "501") {
-      dialog.querySelector(".passcode-error").textContent = "Incorrect passcode.";
+      dialog.querySelector(".passcode-error").textContent = "Passcode salah.";
       input.value = "";
       input.focus();
       return;
@@ -354,7 +354,7 @@ function requestPasscode(title, onSuccess) {
 }
 
 function returnToDashboardWithPasscode() {
-  requestPasscode("Staff Passcode", showDashboard);
+  requestPasscode("Passcode Staf", showDashboard);
 }
 
 function closeQuickCreateDialog() {
@@ -367,69 +367,69 @@ function openQuickCreateDialog() {
     "beforeend",
     `
       <div class="passcode-backdrop quick-create-backdrop" role="presentation">
-        <form class="quick-create-dialog" id="quick-create-form" aria-label="Create new guided session">
-          <h2>Create New Session</h2>
-          <p class="muted">Complete the session details, then create the guided session.</p>
+        <form class="quick-create-dialog" id="quick-create-form" aria-label="Buat sesi terpandu baru">
+          <h2>Buat Sesi Baru</h2>
+          <p class="muted">Lengkapi detail sesi, lalu buat sesi terpandu.</p>
           <div class="quick-create-grid">
             <label>
-              Employer name
-              <input name="employerName" required placeholder="Respondent name">
+              Nama responden
+              <input name="employerName" required placeholder="Nama responden">
             </label>
             <label>
-              Session code
-              <input name="sessionCode" placeholder="Optional, e.g. PILOT-A1">
+              Kode sesi
+              <input name="sessionCode" placeholder="Opsional, mis. PILOT-A1">
             </label>
             <label>
-              Business name
-              <input name="businessName" placeholder="MSME name">
+              Nama usaha
+              <input name="businessName" placeholder="Nama UMKM">
             </label>
             <label>
-              Contact
-              <input name="contact" placeholder="Phone or email">
+              Kontak
+              <input name="contact" placeholder="Nomor telepon atau email">
             </label>
             <label>
               Enumerator
               <select name="enumeratorId" required></select>
             </label>
             <label>
-              Treatment arm
+              Kelompok perlakuan
               <select name="treatmentArm" required>
-                <option value="hidden">Hidden</option>
-                <option value="hidden_placebo">Hidden + additional information</option>
-                <option value="transparent">Transparent</option>
-                <option value="transparent_placebo">Transparent + additional information</option>
+                <option value="hidden">Tersembunyi</option>
+                <option value="hidden_placebo">Tersembunyi + informasi tambahan</option>
+                <option value="transparent">Terbuka</option>
+                <option value="transparent_placebo">Terbuka + informasi tambahan</option>
               </select>
             </label>
             <label>
-              Candidate set
+              Set kandidat
               <select name="candidateSetId" required></select>
             </label>
             <label>
-              Number of candidates to review
+              Jumlah kandidat yang dinilai
               <select name="candidateLimit" required>
-                <option value="3">3 candidates</option>
-                <option value="5">5 candidates</option>
-                <option value="10">10 candidates</option>
-                <option value="15">15 candidates</option>
-                <option value="20" selected>20 candidates</option>
+                <option value="3">3 kandidat</option>
+                <option value="5">5 kandidat</option>
+                <option value="10">10 kandidat</option>
+                <option value="15">15 kandidat</option>
+                <option value="20" selected>20 kandidat</option>
               </select>
             </label>
             <label>
-              Delivery mode
+              Mode pelaksanaan
               <select name="mode" required>
-                <option value="online">Online guided</option>
-                <option value="offline">Offline guided</option>
+                <option value="online">Terpandu online</option>
+                <option value="offline">Terpandu offline</option>
               </select>
             </label>
             <label>
-              Randomization seed
-              <input name="randomizationSeed" inputmode="numeric" placeholder="Optional">
+              Seed randomisasi
+              <input name="randomizationSeed" inputmode="numeric" placeholder="Opsional">
             </label>
           </div>
           <p class="quick-create-status muted" aria-live="polite"></p>
           <div class="nav-actions">
-            <button class="secondary quick-create-cancel" type="button">Cancel</button>
-            <button type="submit">Create guided session</button>
+            <button class="secondary quick-create-cancel" type="button">Batal</button>
+            <button type="submit">Buat sesi terpandu</button>
           </div>
         </form>
       </div>
@@ -457,11 +457,11 @@ function openQuickCreateDialog() {
 }
 
 function requestQuickCreateSession() {
-  requestPasscode("Staff Passcode", openQuickCreateDialog);
+  requestPasscode("Passcode Staf", openQuickCreateDialog);
 }
 
 function returnHomeWithPasscode() {
-  requestPasscode("Home Passcode", async () => {
+  requestPasscode("Passcode Beranda", async () => {
     state.enumeratorControls = false;
     showLanding();
   });
@@ -477,49 +477,50 @@ quickCreateSessionButton.addEventListener("click", requestQuickCreateSession);
 function renderEligibilityIntro(kind) {
   respondent.innerHTML = `
     <article class="text-page">
-      <h2>Session Introduction</h2>
+      <h2>Pengantar Sesi</h2>
       <p>
-        Thank you for joining this session.
+        Terima kasih telah bergabung dalam sesi ini.
       </p>
       <p>
-        In this session, we would like to understand your preferences when considering candidates
-        for a social media admin, social media manager, or related digital creative role.
+        Dalam sesi ini, kami ingin memahami preferensi Anda saat mempertimbangkan kandidat
+        untuk posisi admin media sosial, manajer media sosial, atau pekerjaan kreatif digital terkait.
       </p>
       <p>
-        Before continuing, we first need to confirm whether your business is currently hiring or
-        planning to hire someone for this type of position. We will also ask several questions
-        about you and your business before the candidate review begins.
+        Sebelum melanjutkan, kami perlu mengetahui apakah usaha Anda saat ini sedang merekrut atau
+        berencana merekrut seseorang untuk posisi seperti ini. Kami juga akan menanyakan beberapa
+        pertanyaan tentang Anda dan usaha Anda sebelum penilaian kandidat dimulai.
       </p>
       <p>
-        To appreciate your time and participation, you will receive an IDR 350,000 participation
-        fee after completing the session.
+        Sebagai apresiasi atas waktu dan partisipasi Anda, Anda akan menerima biaya partisipasi
+        sebesar IDR 350.000 setelah menyelesaikan sesi ini.
       </p>
       <p>
-        In addition, your careful review will help us identify candidates from our talent pool who
-        may be a good match for your role. <strong>This may help reduce the time and effort needed
-        in your hiring process.</strong> For this reason, please review each part of the session
-        seriously and answer based on your genuine assessment.
+        Selain itu, penilaian Anda yang cermat akan membantu kami mengidentifikasi kandidat dari
+        kumpulan talenta kami yang mungkin cocok untuk kebutuhan posisi Anda. <strong>Hal ini dapat
+        membantu mengurangi waktu dan usaha yang dibutuhkan dalam proses rekrutmen Anda.</strong>
+        Oleh karena itu, mohon menilai setiap bagian sesi ini secara serius dan menjawab berdasarkan
+        penilaian Anda yang sebenarnya.
       </p>
       <p>
-        Are you currently hiring or planning to hire someone for a social media admin, social media
-        manager, or related digital creative position within the next 3 months?
+        Apakah saat ini Anda sedang merekrut atau berencana merekrut seseorang untuk posisi admin
+        media sosial, manajer media sosial, atau pekerjaan kreatif digital terkait dalam 3 bulan ke depan?
       </p>
       <form id="eligibility-form">
         <div class="eligibility-options">
           <label>
             <input type="radio" name="eligibility" value="currently_hiring" required>
-            <span>Yes, currently hiring</span>
+            <span>Ya, saat ini sedang merekrut</span>
           </label>
           <label>
             <input type="radio" name="eligibility" value="considering_hiring" required>
-            <span>Yes, planning to hire within the next 3 months</span>
+            <span>Ya, berencana merekrut dalam 3 bulan ke depan</span>
           </label>
           <label>
             <input type="radio" name="eligibility" value="not_eligible" required>
-            <span>No</span>
+            <span>Tidak</span>
           </label>
         </div>
-        ${navigationButtons("Continue")}
+        ${navigationButtons("Lanjut")}
       </form>
     </article>
   `;
@@ -543,19 +544,19 @@ function renderEligibilityIntro(kind) {
 function renderCandidateReviewIntro() {
   respondent.innerHTML = `
     <article class="text-page">
-      <h2>Candidate Profile Review</h2>
+      <h2>Penilaian Profil Kandidat</h2>
       <p>
-        In this session, you will review a number of candidate profiles relevant to entry-level
-        social media management or related digital creative work. These profiles are constructed
-        based on real resumes submitted by participants in our talent pool.
+        Dalam sesi ini, Anda akan menilai sejumlah profil kandidat yang relevan untuk posisi
+        awal pengelolaan media sosial atau pekerjaan kreatif digital terkait. Profil-profil ini
+        disusun berdasarkan resume nyata yang dikumpulkan dari peserta dalam kumpulan talenta kami.
       </p>
       <p>
-        Please review each candidate carefully and answer the follow-up questions based on your
-        genuine assessment. Your careful and honest assessment of each profile is important because
-        it will help identify candidates who <strong>best suit</strong> your social media and
-        digital creative role requirements.
+        Mohon menilai setiap kandidat dengan cermat dan menjawab pertanyaan lanjutan berdasarkan
+        penilaian Anda yang sebenarnya. Penilaian Anda yang cermat dan jujur atas setiap profil
+        penting karena akan membantu mengidentifikasi kandidat yang <strong>paling sesuai</strong>
+        dengan kebutuhan posisi media sosial dan kreatif digital Anda.
       </p>
-      ${navigationButtons("Continue")}
+      ${navigationButtons("Lanjut")}
     </article>
   `;
   attachNavigation(respondent);
@@ -572,127 +573,131 @@ function radioOptions(name, options) {
 
 function renderEmployerCharacteristics() {
   const currentYear = new Date().getFullYear();
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  ];
   respondent.innerHTML = `
     <article class="characteristics-page">
       <div class="characteristics-heading">
         <div>
-          <h2>About You and Your Business</h2>
-          <p class="muted">Please answer the following questions before reviewing the candidate profiles.</p>
+          <h2>Tentang Anda dan Usaha Anda</h2>
+          <p class="muted">Mohon jawab pertanyaan berikut sebelum menilai profil kandidat.</p>
         </div>
       </div>
       <form id="characteristics-form">
         <div class="characteristics-grid">
           <section class="characteristics-section">
-            <h3>A. Respondent characteristics</h3>
+            <h3>A. Karakteristik responden</h3>
             <fieldset class="compact-fieldset">
-              <legend>A1. Gender</legend>
+              <legend>A1. Jenis kelamin</legend>
               <div class="compact-options">
-                ${radioOptions("gender", [["male", "Male"], ["female", "Female"], ["prefer_not_to_say", "Prefer not to say"]])}
+                ${radioOptions("gender", [["male", "Laki-laki"], ["female", "Perempuan"], ["prefer_not_to_say", "Memilih untuk tidak menjawab"]])}
               </div>
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>A2. Date of birth</legend>
+              <legend>A2. Tanggal lahir</legend>
               <div class="inline-inputs">
-                <label>Month
+                <label>Bulan
                   <select name="birthMonth" required>
-                    <option value="">Select</option>
-                    ${Array.from({ length: 12 }, (_, index) => `<option value="${index + 1}">${index + 1}</option>`).join("")}
+                    <option value="">Pilih</option>
+                    ${monthNames.map((month, index) => `<option value="${index + 1}">${month}</option>`).join("")}
                   </select>
                 </label>
-                <label>Year
+                <label>Tahun
                   <input class="year-input" name="birthYear" type="number" min="1900" max="${currentYear - 15}" step="1" inputmode="numeric" required>
                 </label>
               </div>
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>A3. Highest level of education completed</legend>
+              <legend>A3. Tingkat pendidikan tertinggi yang diselesaikan</legend>
               <div class="compact-options">
                 ${radioOptions("education", [
-                  ["primary_or_below", "Primary school or below"],
-                  ["junior_secondary", "Junior secondary school"],
-                  ["senior_or_vocational", "Senior secondary / vocational high school"],
+                  ["primary_or_below", "Sekolah dasar atau di bawahnya"],
+                  ["junior_secondary", "Sekolah menengah pertama"],
+                  ["senior_or_vocational", "SMA / SMK"],
                   ["diploma", "Diploma"],
-                  ["bachelor", "Bachelor's degree"],
-                  ["master_or_above", "Master's degree or above"],
+                  ["bachelor", "Sarjana"],
+                  ["master_or_above", "Magister atau lebih tinggi"],
                 ])}
               </div>
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>A4. Role in the business</legend>
+              <legend>A4. Peran dalam usaha</legend>
               <div class="compact-options">
                 ${radioOptions("businessRole", [
-                  ["owner", "Owner"], ["co_owner", "Co-owner"], ["manager", "Manager"],
-                  ["hr_recruitment", "HR / recruitment staff"], ["other", "Other"],
+                  ["owner", "Pemilik"], ["co_owner", "Rekan pemilik"], ["manager", "Manajer"],
+                  ["hr_recruitment", "Staf HR / rekrutmen"], ["other", "Lainnya"],
                 ])}
               </div>
-              <input class="conditional-other hidden" name="businessRoleOther" placeholder="Please specify role">
+              <input class="conditional-other hidden" name="businessRoleOther" placeholder="Sebutkan peran">
             </fieldset>
           </section>
 
           <section class="characteristics-section">
-            <h3>B. Business characteristics</h3>
+            <h3>B. Karakteristik usaha</h3>
             <fieldset class="compact-fieldset">
-              <legend>B1. Main business sector</legend>
+              <legend>B1. Sektor utama usaha</legend>
               <div class="compact-options">
                 ${radioOptions("businessSector", [
-                  ["manufacturing", "Manufacturing"],
-                  ["accommodation_food", "Accommodation and food service activities"],
-                  ["wholesale_retail", "Wholesale and retail trade"],
-                  ["personal_services", "Other personal service activities (beauty services)"],
-                  ["other", "Other sector"],
+                  ["manufacturing", "Manufaktur"],
+                  ["accommodation_food", "Akomodasi dan penyediaan makanan/minuman"],
+                  ["wholesale_retail", "Perdagangan besar dan eceran"],
+                  ["personal_services", "Jasa personal lainnya (jasa kecantikan)"],
+                  ["other", "Sektor lainnya"],
                 ])}
               </div>
-              <input class="conditional-other hidden" name="businessSectorOther" placeholder="Please specify sector">
+              <input class="conditional-other hidden" name="businessSectorOther" placeholder="Sebutkan sektor">
             </fieldset>
             <div class="compact-pair">
-              <label><strong>B2. Year business was established</strong>
+              <label><strong>B2. Tahun usaha berdiri</strong>
                 <input class="year-input" name="establishedYear" type="number" min="1900" max="${currentYear}" step="1" inputmode="numeric" required>
               </label>
               <fieldset class="compact-fieldset">
-                <legend>B3. Number of workers</legend>
+                <legend>B3. Jumlah pekerja</legend>
                 <div class="compact-options two-up">
-                  ${radioOptions("workers", [["1_4", "1–4"], ["5_19", "5–19"], ["20_99", "20–99"], ["100_plus", "100 or more"]])}
+                  ${radioOptions("workers", [["1_4", "1-4"], ["5_19", "5-19"], ["20_99", "20-99"], ["100_plus", "100 atau lebih"]])}
                 </div>
               </fieldset>
             </div>
             <fieldset class="compact-fieldset">
-              <legend>B4. Approximate annual revenue</legend>
+              <legend>B4. Perkiraan omzet tahunan</legend>
               <div class="compact-options">
                 ${radioOptions("annualRevenue", [
-                  ["less_300m", "Less than IDR 300 million"],
-                  ["300m_to_2_5b", "IDR 300 million to less than IDR 2.5 billion"],
-                  ["2_5b_to_50b", "IDR 2.5 billion to less than IDR 50 billion"],
-                  ["50b_plus", "IDR 50 billion or more"],
-                  ["prefer_not_to_say", "Prefer not to say"],
+                  ["less_300m", "Kurang dari IDR 300 juta"],
+                  ["300m_to_2_5b", "IDR 300 juta sampai kurang dari IDR 2,5 miliar"],
+                  ["2_5b_to_50b", "IDR 2,5 miliar sampai kurang dari IDR 50 miliar"],
+                  ["50b_plus", "IDR 50 miliar atau lebih"],
+                  ["prefer_not_to_say", "Memilih untuk tidak menjawab"],
                 ])}
               </div>
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>B5. Business location</legend>
+              <legend>B5. Lokasi usaha</legend>
               <div class="inline-inputs">
-                <label>City<input name="city" required></label>
-                <label>Province<input name="province" required></label>
+                <label>Kota<input name="city" required></label>
+                <label>Provinsi<input name="province" required></label>
               </div>
             </fieldset>
           </section>
 
           <section class="characteristics-section">
-            <h3>C. Digital-related activity</h3>
+            <h3>C. Aktivitas terkait digital</h3>
             <fieldset class="compact-fieldset">
-              <legend>C2. Current use of social media for business</legend>
-              <p class="compact-prompt">Does your business currently have an active social media account for marketing or sales purposes?</p>
+              <legend>C2. Penggunaan media sosial untuk usaha saat ini</legend>
+              <p class="compact-prompt">Apakah usaha Anda saat ini memiliki akun media sosial aktif untuk pemasaran atau penjualan?</p>
               <div class="compact-options two-up">
-                ${radioOptions("activeSocialMedia", [["yes", "Yes"], ["no", "No"]])}
+                ${radioOptions("activeSocialMedia", [["yes", "Ya"], ["no", "Tidak"]])}
               </div>
             </fieldset>
             <fieldset class="compact-fieldset platforms-fieldset">
-              <legend>C3. Platforms currently used</legend>
-              <p class="compact-prompt">Select all that apply.</p>
+              <legend>C3. Platform yang saat ini digunakan</legend>
+              <p class="compact-prompt">Pilih semua yang sesuai.</p>
               <div class="compact-options two-up platform-options">
                 ${[
                   ["instagram", "Instagram"], ["tiktok", "TikTok"], ["facebook", "Facebook"],
                   ["whatsapp_business", "WhatsApp Business"], ["youtube", "YouTube"],
-                  ["x_twitter", "X / Twitter"], ["other", "Other"],
+                  ["x_twitter", "X / Twitter"], ["other", "Lainnya"],
                 ].map(([value, label]) => `
                   <label class="compact-option">
                     <input type="checkbox" name="platforms" value="${value}">
@@ -700,43 +705,43 @@ function renderEmployerCharacteristics() {
                   </label>
                 `).join("")}
               </div>
-              <input class="conditional-other hidden" name="platformOther" placeholder="Please specify platform">
+              <input class="conditional-other hidden" name="platformOther" placeholder="Sebutkan platform">
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>C4. Previous hiring experience</legend>
-              <p class="compact-prompt">Has your business hired someone specifically to manage social media, content, or digital promotion before?</p>
+              <legend>C4. Pengalaman rekrutmen sebelumnya</legend>
+              <p class="compact-prompt">Apakah usaha Anda pernah merekrut seseorang secara khusus untuk mengelola media sosial, konten, atau promosi digital?</p>
               <div class="compact-options two-up">
-                ${radioOptions("previousDigitalHiring", [["yes", "Yes"], ["no", "No"]])}
+                ${radioOptions("previousDigitalHiring", [["yes", "Ya"], ["no", "Tidak"]])}
               </div>
             </fieldset>
             <fieldset class="compact-fieldset">
-              <legend>C5. Most recent work arrangement</legend>
-              <p class="compact-prompt">What arrangement was most recently used, or do you plan to use for the next hiring?</p>
+              <legend>C5. Bentuk kerja terbaru</legend>
+              <p class="compact-prompt">Bentuk kerja apa yang terakhir digunakan, atau yang Anda rencanakan untuk rekrutmen berikutnya?</p>
               <div class="compact-options">
                 ${radioOptions("workArrangement", [
-                  ["full_time", "Full-time employee"], ["part_time", "Part-time employee"],
-                  ["freelancer", "Freelancer / project-based worker"],
-                  ["family_informal", "Family member / informal help"], ["other", "Other"],
+                  ["full_time", "Karyawan penuh waktu"], ["part_time", "Karyawan paruh waktu"],
+                  ["freelancer", "Freelancer / pekerja berbasis proyek"],
+                  ["family_informal", "Anggota keluarga / bantuan informal"], ["other", "Lainnya"],
                 ])}
               </div>
-              <input class="conditional-other hidden" name="workArrangementOther" placeholder="Please specify arrangement">
+              <input class="conditional-other hidden" name="workArrangementOther" placeholder="Sebutkan bentuk kerja">
             </fieldset>
           </section>
 
           <section class="characteristics-section">
-            <h3>D. Participation motivation</h3>
+            <h3>D. Motivasi partisipasi</h3>
             <fieldset class="compact-fieldset">
-              <legend>D1. Importance of candidate-matching benefit</legend>
-              <p class="compact-prompt">How important is the possibility of being matched with potential candidates in motivating you to participate in this session?</p>
+              <legend>D1. Pentingnya manfaat pencocokan kandidat</legend>
+              <p class="compact-prompt">Seberapa penting kemungkinan dicocokkan dengan kandidat potensial dalam memotivasi Anda untuk mengikuti sesi ini?</p>
               <div class="importance-scale">
-                ${radioOptions("matchingBenefitImportance", [["1", "1 Not important"], ["2", "2 Slightly"], ["3", "3 Moderately"], ["4", "4 Important"], ["5", "5 Very important"]])}
+                ${radioOptions("matchingBenefitImportance", [["1", "1 Tidak penting"], ["2", "2 Sedikit penting"], ["3", "3 Cukup penting"], ["4", "4 Penting"], ["5", "5 Sangat penting"]])}
               </div>
             </fieldset>
           </section>
         </div>
         <div class="nav-actions">
-          <button class="secondary previous-characteristics" type="button">Previous</button>
-          <button type="submit">Save and continue</button>
+          <button class="secondary previous-characteristics" type="button">Sebelumnya</button>
+          <button type="submit">Simpan dan lanjutkan</button>
         </div>
       </form>
     </article>
@@ -745,8 +750,26 @@ function renderEmployerCharacteristics() {
   const form = respondent.querySelector("#characteristics-form");
   populateCharacteristicsForm(form, state.session.characteristics);
   attachCharacteristicsConditions(form);
+  attachYearInputDefaults(form);
   form.querySelector(".previous-characteristics").addEventListener("click", previousStep);
   form.addEventListener("submit", submitEmployerCharacteristics);
+}
+
+function attachYearInputDefaults(form) {
+  form.querySelectorAll(".year-input").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (!input.value && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        input.value = "2010";
+      }
+    });
+
+    input.addEventListener("pointerdown", (event) => {
+      const clickedStepper = event.offsetX >= input.clientWidth - 28;
+      if (!input.value && clickedStepper) {
+        input.value = "2010";
+      }
+    });
+  });
 }
 
 function populateCharacteristicsForm(form, saved) {
@@ -831,7 +854,7 @@ async function submitEmployerCharacteristics(event) {
   const data = Object.fromEntries(new FormData(form).entries());
   data.platforms = [...form.querySelectorAll('input[name="platforms"]:checked')].map((input) => input.value);
   if (data.activeSocialMedia === "yes" && data.platforms.length === 0) {
-    alert("Please select at least one social media platform currently used.");
+    alert("Mohon pilih setidaknya satu platform media sosial yang saat ini digunakan.");
     return;
   }
   await api(`/api/session/${state.session.session.id}/characteristics`, {
@@ -845,14 +868,14 @@ async function submitEmployerCharacteristics(event) {
 
 function renderProductivityDefinition(variant) {
   const isReveal = variant === "hidden_reveal";
-  const title = "Candidate Performance Information";
+  const title = "Informasi Kinerja Kandidat";
   const transition = isReveal
     ? `
-      <p>Thank you. You have now completed the first review of all candidate profiles.</p>
+      <p>Terima kasih. Anda telah menyelesaikan penilaian pertama untuk semua profil kandidat.</p>
       <p>
-        In the next section, you will review the same candidate profiles again. This time, each
-        profile will include information from the candidate's performance test. As before, please
-        answer the follow-up questions based on your genuine assessment.
+        Pada bagian berikutnya, Anda akan menilai kembali profil kandidat yang sama. Kali ini, setiap
+        profil akan memuat informasi dari tes kinerja kandidat. Seperti sebelumnya, mohon jawab
+        pertanyaan lanjutan berdasarkan penilaian Anda yang sebenarnya.
       </p>
     `
     : "";
@@ -863,160 +886,125 @@ function renderProductivityDefinition(variant) {
       <div class="productivity-info-copy">
         ${transition}
         <section class="information-copy-section">
-          <h3>Introduction</h3>
+          <h3>Pengantar</h3>
           <p>
-            We understand that it can be difficult to judge how well a candidate will perform in
-            this role based on a profile alone. For this reason, all candidates completed a
-            standardized social media performance test.
+            Kami memahami bahwa menilai seberapa baik seorang kandidat akan bekerja dalam posisi ini
+            hanya berdasarkan profil dapat menjadi hal yang sulit. Oleh karena itu, semua kandidat
+            mengikuti tes kinerja media sosial yang terstandar.
           </p>
         </section>
         <section class="information-copy-section">
-          <h3>How Candidate Performance Was Assessed</h3>
+          <h3>Bagaimana Kinerja Kandidat Dinilai</h3>
           <ul>
             <li>
-              The test took place over three weeks in a <strong>competition setting</strong>. All
-              candidates completed it under the same general conditions and received the same
-              participation compensation.
+              Tes dilakukan selama tiga minggu dalam <strong>format kompetisi</strong>. Semua kandidat
+              mengikuti tes dengan kondisi umum yang sama dan menerima kompensasi partisipasi yang sama.
             </li>
-            <li>The <strong>three best performers received additional prizes</strong>.</li>
+            <li><strong>Tiga peserta dengan kinerja terbaik menerima hadiah tambahan</strong>.</li>
             <li>
-              Candidates were free to use any software or AI tools to create content. However,
-              they were not allowed to buy followers or generate fake interactions.
+              Kandidat bebas menggunakan perangkat lunak atau alat AI apa pun untuk membuat konten.
+              Namun, mereka tidak diperbolehkan membeli pengikut atau membuat interaksi palsu.
             </li>
           </ul>
         </section>
         <section class="information-copy-section">
-          <h3>Performance Indicators</h3>
-          <p>We use two indicators to assess candidate performance: <strong>Reach</strong> and <strong>Interaction</strong>.</p>
+          <h3>Indikator Kinerja</h3>
+          <p>Kami menggunakan dua indikator untuk menilai kinerja kandidat: <strong>Jangkauan (<i>reach</i>)</strong> dan <strong>Interaksi</strong>.</p>
           <p>
-            <strong>Reach-type indicator:</strong> shows how broadly a candidate's content reached
-            an audience. It is measured as the average number of <strong>unique accounts reached per post</strong>
-            during the evaluation period. This is different from views: one account may view a post
-            more than once, but it is counted only once for reach.
+            <strong>Indikator Jangkauan (<i>reach</i>):</strong> menunjukkan seberapa luas konten kandidat
+            menjangkau audiens. Indikator ini diukur sebagai rata-rata jumlah
+            <strong>akun unik yang dijangkau per postingan</strong> selama periode evaluasi. Ini berbeda
+            dari jumlah tayangan: satu akun dapat melihat satu postingan lebih dari sekali, tetapi
+            hanya dihitung satu kali dalam ukuran jangkauan.
           </p>
           <p>
-            <strong>Interaction-type indicator:</strong> shows how audiences responded to a
-            candidate's content. It is measured as the average number of interactions per post
-            during the evaluation period. Interactions include likes or reactions, comments,
-            reposts, shares, and saves.
+            <strong>Indikator Interaksi:</strong> menunjukkan bagaimana audiens merespons konten
+            kandidat. Indikator ini diukur sebagai rata-rata jumlah interaksi per postingan selama
+            periode evaluasi. Interaksi mencakup likes atau reaksi, komentar, repost, share, dan save.
           </p>
         </section>
         <p>
-          In the next section, the candidate profiles will include information from this test to
-          summarize how each candidate performed in managing social media content and attracting
-          audience response.
+          Pada bagian berikutnya, profil kandidat akan memuat informasi dari tes ini untuk merangkum
+          kinerja setiap kandidat dalam mengelola konten media sosial dan menarik respons audiens.
         </p>
       </div>
-      <section class="metric-examples" aria-label="Examples of performance indicators">
-        <h3>Performance Indicator Illustrations</h3>
+      <section class="metric-examples" aria-label="Contoh indikator kinerja">
+        <h3>Ilustrasi Indikator Kinerja</h3>
         <article class="metric-example">
-          <h4>Reach-Type Indicator Illustration</h4>
-          <img src="/assets/reach-example.jpg" alt="Example platform insight showing accounts reached">
+          <h4>Ilustrasi Indikator Jangkauan (<i>reach</i>)</h4>
+          <img src="/assets/reach-example.jpg" alt="Contoh insight platform yang menunjukkan akun dijangkau">
         </article>
         <article class="metric-example">
-          <h4>Interaction-Type Indicator Illustration</h4>
-          <img src="/assets/interaction-example.jpg" alt="Example platform insight showing likes, comments, reposts, shares, and saves">
+          <h4>Ilustrasi Indikator Interaksi</h4>
+          <img src="/assets/interaction-example.jpg" alt="Contoh insight platform yang menunjukkan likes, komentar, repost, share, dan save">
         </article>
       </section>
       <p class="muted">
-        These screenshots are examples only. Candidate-specific values will be shown on each
-        candidate profile.
+        Tangkapan layar ini hanya contoh. Nilai khusus untuk setiap kandidat akan ditampilkan pada
+        masing-masing profil kandidat.
       </p>
-      ${navigationButtons("Continue")}
+      ${navigationButtons("Lanjut")}
     </article>
   `;
   attachNavigation(respondent);
 }
 
-function renderGuideScale(label, position, showCallout = false) {
+function renderGuideScale(label, position, calloutText = "", benchmark = {}) {
   const markerClass = performanceMarkerClass(position);
+  const { min = "", median = "", max = "" } = benchmark;
   return `
     <div class="guide-metric">
       <p><strong>${label}</strong></p>
-      <div class="guide-track${showCallout ? " guide-track-with-callout" : ""}">
-        ${showCallout ? `<span class="marker-callout" style="--guide-position: ${position}%">Candidate's position <span aria-hidden="true">&darr;</span></span>` : ""}
+      <div class="guide-track${calloutText ? " guide-track-with-callout" : ""}">
+        ${calloutText ? `<span class="marker-callout" style="--guide-position: ${position}%">${calloutText} <span aria-hidden="true">&darr;</span></span>` : ""}
         <span class="scale-tick scale-min"></span>
         <span class="scale-tick scale-median"></span>
         <span class="scale-tick scale-max"></span>
         <span class="guide-marker ${markerClass}" style="--guide-position: ${position}%"></span>
       </div>
       <div class="guide-scale-labels">
-        <span>Minimum</span><span>Median</span><span>Maximum</span>
+        <span><span>Minimum</span><strong>${min}</strong></span>
+        <span><span>Median</span><strong>${median}</strong></span>
+        <span><span>Maksimum</span><strong>${max}</strong></span>
       </div>
     </div>
   `;
 }
 
 function renderProductivityReadingGuide() {
-  const examples = [
-    {
-      title: "Lowest observed performance",
-      tone: "performance-case-low",
-      reach: 0,
-      interaction: 0,
-      explanation: "Both markers are at the minimum. This candidate recorded the lowest observed Reach and Interaction performance in the talent pool.",
-    },
-    {
-      title: "Highest observed performance",
-      tone: "performance-case-high",
-      reach: 100,
-      interaction: 100,
-      explanation: "Both markers are at the maximum. This candidate recorded the highest observed Reach and Interaction performance in the talent pool.",
-    },
-    {
-      title: "Lower reach, stronger interaction",
-      tone: "performance-case-mixed-warm",
-      reach: 25,
-      interaction: 75,
-      explanation: "Reach is between the minimum and median, while Interaction is between the median and maximum. This candidate has lower reach but stronger interaction relative to the talent pool.",
-    },
-    {
-      title: "Stronger reach, lower interaction",
-      tone: "performance-case-mixed-cool",
-      reach: 75,
-      interaction: 25,
-      explanation: "Reach is between the median and maximum, while Interaction is between the minimum and median. This candidate has stronger reach but lower interaction relative to the talent pool.",
-    },
-  ];
-
   respondent.innerHTML = `
     <article class="text-page performance-reading-page">
-      <h2>How to Read Candidate Performance Information</h2>
+      <h2>Cara Membaca Informasi Kinerja Kandidat</h2>
       <section class="performance-reading-key">
         <div class="key-copy">
           <p>
-            The dot shows the candidate's position for that indicator. The line runs from the
-            <strong class="scale-value-low">lowest</strong> observed performance in the talent pool to the
-            <strong class="scale-value-high">highest</strong> observed performance, with the median in the
-            <strong>middle</strong>.
+            Titik menunjukkan posisi kandidat untuk setiap indikator. Garis bergerak dari kinerja
+            <strong class="scale-value-low">terendah</strong> yang diamati dalam kumpulan talenta hingga
+            kinerja <strong class="scale-value-high">tertinggi</strong> yang diamati, dengan median di
+            <strong>tengah</strong>.
           </p>
           <div class="benchmark-summary">
-            <strong>Talent-pool benchmark</strong>
-            <span>Reach: minimum <strong class="scale-value-low">320</strong>, median <strong class="scale-value-median">950</strong>, maximum <strong class="scale-value-high">4,100</strong> accounts reached per post.</span>
-            <span>Interaction: minimum <strong class="scale-value-low">12</strong>, median <strong class="scale-value-median">54</strong>, maximum <strong class="scale-value-high">280</strong> interactions per post.</span>
+            <strong>Benchmark kumpulan talenta</strong>
+            <span>Jangkauan (<i>reach</i>): minimum <strong class="scale-value-low">100</strong>, median <strong class="scale-value-median">500</strong>, maksimum <strong class="scale-value-high">2.500</strong> akun dijangkau per postingan.</span>
+            <span>Interaksi: minimum <strong class="scale-value-low">3</strong>, median <strong class="scale-value-median">25</strong>, maksimum <strong class="scale-value-high">150</strong> interaksi per postingan.</span>
           </div>
           <ul class="reading-key-points">
-            <li>The benchmark is calculated from all candidates' standardized-task results.</li>
-            <li>The median means that half of candidates scored below it and half scored above it.</li>
-            <li>The raw number gives the actual average per post; the line shows the candidate's relative position.</li>
+            <li>Benchmark dihitung dari hasil tes terstandar seluruh kandidat.</li>
+            <li>Median berarti separuh kandidat memiliki nilai di bawahnya dan separuh kandidat memiliki nilai di atasnya.</li>
+            <li>Angka mentah menunjukkan rata-rata aktual per postingan; garis menunjukkan posisi relatif kandidat.</li>
           </ul>
         </div>
-        <div class="key-scale" aria-label="Example performance scale">
-          ${renderGuideScale("Example indicator", 68, true)}
+        <div class="key-scale performance-guide-example" aria-label="Contoh kinerja kandidat">
+          <h3>Contoh: Jangkauan Lebih Rendah, Interaksi Lebih Kuat</h3>
+          ${renderGuideScale("Indikator Jangkauan (<i>reach</i>)", 25, "Posisi Jangkauan Kandidat", { min: "100", median: "500", max: "2.500" })}
+          ${renderGuideScale("Indikator Interaksi", 75, "Posisi Interaksi Kandidat", { min: "3", median: "25", max: "150" })}
+          <p>
+            Dalam contoh ini, jangkauan kandidat berada di bawah median, sedangkan interaksinya
+            berada di atas median dibandingkan dengan kumpulan talenta.
+          </p>
         </div>
       </section>
-      <h3 class="performance-guide-heading">Possible Cases of Candidate Performance</h3>
-      <section class="performance-guide-examples" aria-label="Examples of interpreting performance information">
-        ${examples.map((example) => `
-          <article class="performance-guide-card ${example.tone}">
-            <h3>${example.title}</h3>
-            ${renderGuideScale("Reach-type indicator", example.reach)}
-            ${renderGuideScale("Interaction-type indicator", example.interaction)}
-            <p>${example.explanation}</p>
-          </article>
-        `).join("")}
-      </section>
-      ${navigationButtons("Continue")}
+      ${navigationButtons("Lanjut")}
     </article>
   `;
   attachNavigation(respondent);
@@ -1025,13 +1013,13 @@ function renderProductivityReadingGuide() {
 function renderIneligibleEnd() {
   respondent.innerHTML = `
     <article class="text-page">
-      <h2>End Screen</h2>
+      <h2>Akhir Sesi</h2>
       <p>
-        Thank you for your time. Based on the eligibility response, this session will not continue
-        to the candidate evaluation screens.
+        Terima kasih atas waktu Anda. Berdasarkan jawaban kelayakan, sesi ini tidak akan dilanjutkan
+        ke halaman penilaian kandidat.
       </p>
       <div class="nav-actions">
-        <button class="secondary previous-screen" type="button">Previous</button>
+        <button class="secondary previous-screen" type="button">Sebelumnya</button>
       </div>
     </article>
   `;
@@ -1042,11 +1030,11 @@ function renderIneligibleEnd() {
 function renderComplete() {
   respondent.innerHTML = `
     <article class="text-page">
-      <h2>Session Complete</h2>
-      <p>Thank you for your time and careful responses. Your session is complete.</p>
-      <p>We appreciate the care you took in reviewing the candidate profiles.</p>
+      <h2>Sesi Selesai</h2>
+      <p>Terima kasih atas waktu dan jawaban Anda yang cermat. Sesi Anda telah selesai.</p>
+      <p>Kami sangat menghargai perhatian Anda dalam menilai profil kandidat.</p>
       <div class="nav-actions">
-        <button class="secondary previous-screen" type="button">Previous</button>
+        <button class="secondary previous-screen" type="button">Sebelumnya</button>
       </div>
     </article>
   `;
@@ -1062,7 +1050,7 @@ function renderCandidate(step) {
   const draft = response ? null : existingDraftsMap().get(responseKey(candidate.id, step.stage));
   const savedResponse = response || draft;
 
-  card.querySelector(".eyebrow").textContent = `Profile ${candidate.code}`;
+  card.querySelector(".eyebrow").textContent = `Profil ${candidate.code}`;
   card.querySelector("h2").textContent = candidate.pseudonym;
 
   const grid = card.querySelector(".candidate-grid");
@@ -1076,10 +1064,10 @@ function renderCandidate(step) {
   identity.className = "candidate-identity";
   const avatar = document.createElement("img");
   const gender = String(candidate.baseline.gender || "").toLowerCase();
-  const isFemale = gender === "female";
+  const isFemale = gender === "female" || gender === "perempuan";
   avatar.className = "candidate-avatar";
-  avatar.src = isFemale ? "/assets/default-female-avatar.svg" : "/assets/default-male-avatar.svg";
-  avatar.alt = isFemale ? "Default female profile avatar" : "Default male profile avatar";
+  avatar.src = isFemale ? "/assets/default-female-avatar.png" : "/assets/default-male-avatar.png";
+  avatar.alt = isFemale ? "Avatar profil perempuan" : "Avatar profil laki-laki";
   const basicInformation = document.createElement("div");
   basicInformation.className = "candidate-basic-information";
   ["gender", "age"].forEach((key) => {
@@ -1090,8 +1078,8 @@ function renderCandidate(step) {
   const education = document.createElement("section");
   education.className = "education-summary";
   education.innerHTML = `
-    <div><strong>Education Level</strong><span>${candidate.baseline.education_level || "Not specified"}</span></div>
-    <div><strong>Education Major</strong><span>${candidate.baseline.education_major || "Not specified"}</span></div>
+    <div><strong>Tingkat Pendidikan</strong><span>${candidate.baseline.education_level || "Belum diisi"}</span></div>
+    <div><strong>Jurusan Pendidikan</strong><span>${candidate.baseline.education_major || "Belum diisi"}</span></div>
   `;
   basicInformation.append(education);
   if (candidate.baseline.relevant_experience) {
@@ -1105,7 +1093,7 @@ function renderCandidate(step) {
   const showsProductivity = Boolean(step.show_productivity);
   const showsAdditionalInformation = Boolean(step.show_additional_information);
   if (showsProductivity) {
-    informationBlock.innerHTML = `<h3>Candidate Performance Information</h3>`;
+    informationBlock.innerHTML = `<h3>Informasi Kinerja Kandidat</h3>`;
     Object.entries(candidate.productivity).forEach(([key, value]) => {
       if (key === "benchmark") {
         return;
@@ -1122,7 +1110,7 @@ function renderCandidate(step) {
   if (showsAdditionalInformation) {
     const additionalInformation = document.createElement("section");
     additionalInformation.className = "additional-information-subsection";
-    additionalInformation.innerHTML = "<h3>Additional Information</h3>";
+    additionalInformation.innerHTML = "<h3>Informasi Tambahan</h3>";
     Object.entries(candidate.placebo).forEach(([key, value]) => {
       const field = document.createElement("p");
       field.innerHTML = `<strong>${labelize(key)}:</strong> ${value}`;
@@ -1259,12 +1247,12 @@ function confirmReasonsStep(form) {
   const hasRatedReason = [...form.querySelectorAll('input[type="range"][name^="score-"]')]
     .some((input) => Number(input.value) > 0);
   if (!hasRatedReason) {
-    alert("Please give at least one reason an importance score above zero before continuing.");
+    alert("Mohon beri nilai kepentingan di atas nol untuk setidaknya satu alasan sebelum melanjutkan.");
     return;
   }
   const otherReasonInput = form.querySelector(".other-reason-input:not(:disabled)");
   if (otherReasonInput && !otherReasonInput.value.trim()) {
-    alert("Please specify the other reason before continuing.");
+    alert("Mohon sebutkan alasan lainnya sebelum melanjutkan.");
     otherReasonInput.focus();
     return;
   }
@@ -1291,12 +1279,12 @@ function renderReasons(form, reasonOptions, rankedReasons, response, draft = nul
   reasonOptions.innerHTML = "";
   rankedReasons.innerHTML = "";
   if (!hireInterest) {
-    reasonsLegend.textContent = "Reason for hiring / not hiring";
-    reasonOptions.innerHTML = "<p class=\"muted\">Choose hiring interest first.</p>";
+    reasonsLegend.textContent = "Alasan merekrut / tidak merekrut";
+    reasonOptions.innerHTML = "<p class=\"muted\">Pilih minat untuk merekrut terlebih dahulu.</p>";
     return;
   }
 
-  reasonsLegend.textContent = hireInterest === "yes" ? "Reasons for hiring" : "Reasons for not hiring";
+  reasonsLegend.textContent = hireInterest === "yes" ? "Alasan merekrut" : "Alasan tidak merekrut";
 
   const canUseCompletedReasons = response && response.hire_interest === hireInterest;
   const canUseDraftReasons = draft && draft.hireInterest === hireInterest;
@@ -1334,7 +1322,7 @@ function renderReasons(form, reasonOptions, rankedReasons, response, draft = nul
         <input type="range" name="score-${reason.id}" min="0" max="100" step="1" value="0">
         <output>0</output>
       </span>
-      ${isOtherReason ? `<input class="other-reason-input hidden" name="otherReasonText" maxlength="300" disabled placeholder="Please specify">` : ""}
+      ${isOtherReason ? `<input class="other-reason-input hidden" name="otherReasonText" maxlength="300" disabled placeholder="Sebutkan">` : ""}
     `;
     const score = line.querySelector(`input[name="score-${reason.id}"]`);
     const output = line.querySelector("output");
@@ -1374,12 +1362,12 @@ function renderReasons(form, reasonOptions, rankedReasons, response, draft = nul
 }
 
 function renderReasonLabel(label) {
-  if (label.startsWith("Additional Information")) {
-    const reference = "Additional Information";
+  if (label.startsWith("Informasi Tambahan")) {
+    const reference = "Informasi Tambahan";
     return `<strong class="reason-information-reference placebo-reference">${reference}</strong>${label.slice(reference.length)}`;
   }
-  if (label.startsWith("Task performance")) {
-    const reference = "Task performance";
+  if (label.startsWith("Kinerja tugas")) {
+    const reference = "Kinerja tugas";
     return `<strong class="reason-information-reference productivity-reference">${reference}</strong>${label.slice(reference.length)}`;
   }
   return label;
@@ -1398,7 +1386,7 @@ async function saveCandidateDraft(form, step, candidate) {
   const status = form.querySelector(".draft-status");
   const button = form.querySelector(".save-candidate-draft");
   button.disabled = true;
-  status.textContent = "Saving...";
+  status.textContent = "Menyimpan...";
   try {
     await api(`/api/session/${state.session.session.id}/response/draft`, {
       method: "POST",
@@ -1413,9 +1401,9 @@ async function saveCandidateDraft(form, step, candidate) {
       }),
     });
     state.session = await api(`/api/session/${state.session.session.id}`);
-    status.textContent = "Draft saved";
+    status.textContent = "Sementara tersimpan";
   } catch (error) {
-    status.textContent = error.message || "Could not save draft";
+    status.textContent = error.message || "Tidak dapat menyimpan sementara";
   } finally {
     button.disabled = false;
   }
@@ -1427,7 +1415,7 @@ async function submitCandidateResponse(event, step, candidate) {
   const wageValue = moneyToInteger(form.elements.wageValue.value);
   const conditionalWageOffer = moneyToInteger(form.elements.conditionalWageOffer.value);
   if (!Number.isSafeInteger(wageValue) || !Number.isSafeInteger(conditionalWageOffer)) {
-    alert("Please enter both salary amounts as whole numbers only.");
+    alert("Mohon masukkan kedua nilai gaji hanya dalam angka bulat.");
     return;
   }
   const reasonScores = collectReasonScores(form);
@@ -1441,7 +1429,7 @@ async function submitCandidateResponse(event, step, candidate) {
     .map((item) => item.reasonId);
 
   if (!selectedReasons.some((reasonId) => reasonScores[reasonId] > 0)) {
-    alert("Please give at least one reason an importance score above zero.");
+    alert("Mohon beri nilai kepentingan di atas nol untuk setidaknya satu alasan.");
     return;
   }
   await api(`/api/session/${state.session.session.id}/response`, {
@@ -1472,12 +1460,16 @@ function labelize(key) {
     return "GPA";
   }
   const labels = {
-    education_level: "Education Level",
-    education_major: "Education Major",
-    relevant_skills: "Relevant Skills",
-    reach_indicator: "Reach-type indicator",
-    interaction_indicator: "Interaction-type indicator",
-    benchmark: "Talent-pool benchmark",
+    gender: "Jenis Kelamin",
+    age: "Usia",
+    education_level: "Tingkat Pendidikan",
+    education_major: "Jurusan Pendidikan",
+    relevant_experience: "Pengalaman Relevan",
+    relevant_skills: "Keahlian Relevan",
+    additional_information: "informasi tambahan",
+    reach_indicator: "Indikator Jangkauan (<i>reach</i>)",
+    interaction_indicator: "Indikator Interaksi",
+    benchmark: "Benchmark kumpulan talenta",
   };
   if (labels[key]) {
     return labels[key];
@@ -1486,22 +1478,22 @@ function labelize(key) {
 }
 
 function formatNumber(value) {
-  return Number(value).toLocaleString("en-US");
+  return Number(value).toLocaleString("id-ID");
 }
 
 function parseMetricValue(text) {
-  const match = String(text).match(/:\s*([\d,]+)/);
-  return match ? Number(match[1].replaceAll(",", "")) : null;
+  const match = String(text).match(/:\s*([\d,.]+)/);
+  return match ? Number(match[1].replace(/\D/g, "")) : null;
 }
 
 function formatCandidateMetric(key, textValue, candidateName) {
   const value = parseMetricValue(textValue);
   const formattedValue = Number.isFinite(value) ? formatNumber(value) : textValue;
   if (key === "reach_indicator") {
-    return `Average accounts reached per post by ${candidateName}: ${formattedValue}`;
+    return `Rata-rata akun yang dijangkau per postingan oleh ${candidateName}: ${formattedValue}`;
   }
   if (key === "interaction_indicator") {
-    return `Average interactions per post by ${candidateName}: ${formattedValue}`;
+    return `Rata-rata interaksi per postingan oleh ${candidateName}: ${formattedValue}`;
   }
   return textValue;
 }
@@ -1535,7 +1527,7 @@ function renderBenchmarkScale(key, textValue, candidateName) {
   const markerPosition = benchmarkPosition(candidateValue, range);
   const markerClass = performanceMarkerClass(markerPosition);
   const candidateLabel = Number.isFinite(candidateValue)
-    ? `<p class="scale-caption">${candidateName} performance: ${formatNumber(candidateValue)} ${range.unit}</p>`
+    ? `<p class="scale-caption">Kinerja ${candidateName}: ${formatNumber(candidateValue)} ${range.unit}</p>`
     : "";
   return `
     <div class="benchmark-scale" style="--candidate-position: ${markerPosition}%">
@@ -1548,7 +1540,7 @@ function renderBenchmarkScale(key, textValue, candidateName) {
       <div class="scale-labels">
         <span>Min ${formatNumber(range.min)}</span>
         <span>Median ${formatNumber(range.median)}</span>
-        <span>Max ${formatNumber(range.max)}</span>
+        <span>Maks ${formatNumber(range.max)}</span>
       </div>
       ${candidateLabel}
     </div>
@@ -1562,14 +1554,14 @@ async function createSessionFromForm(form, statusElement) {
     delete data.randomizationSeed;
   }
   submitButton.disabled = true;
-  statusElement.textContent = "Creating session...";
+  statusElement.textContent = "Membuat sesi...";
   try {
     return await api("/api/sessions", {
       method: "POST",
       body: JSON.stringify(data),
     });
   } catch (error) {
-    statusElement.textContent = error.message || "Could not create the session.";
+    statusElement.textContent = error.message || "Tidak dapat membuat sesi.";
     return null;
   } finally {
     submitButton.disabled = false;
@@ -1586,7 +1578,7 @@ sessionForm.addEventListener("submit", async (event) => {
   form.reset();
   await loadBootstrap();
   await loadSessions();
-  sessionCreateStatus.textContent = `Session ${created.sessionCode} created.`;
+  sessionCreateStatus.textContent = `Sesi ${created.sessionCode} telah dibuat.`;
 });
 
 refreshButton.addEventListener("click", loadSessions);
@@ -1606,7 +1598,7 @@ enumeratorLoginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const passcode = enumeratorLoginForm.elements.passcode.value;
   if (passcode !== "501") {
-    enumeratorLoginStatus.textContent = "Incorrect passcode.";
+    enumeratorLoginStatus.textContent = "Passcode salah.";
     enumeratorLoginForm.elements.passcode.value = "";
     enumeratorLoginForm.elements.passcode.focus();
     return;
@@ -1619,7 +1611,7 @@ enumeratorLoginForm.addEventListener("submit", async (event) => {
 importCandidatesButton.addEventListener("click", async () => {
   const file = candidateCsvInput.files[0];
   if (!file) {
-    candidateImportStatus.textContent = "Choose a CSV file first.";
+    candidateImportStatus.textContent = "Pilih file CSV terlebih dahulu.";
     return;
   }
   const csvText = await file.text();
@@ -1630,10 +1622,10 @@ importCandidatesButton.addEventListener("click", async () => {
   });
   const result = await response.json();
   if (!response.ok) {
-    candidateImportStatus.textContent = result.error || "Import failed.";
+    candidateImportStatus.textContent = result.error || "Impor gagal.";
     return;
   }
-  candidateImportStatus.textContent = `Imported ${result.imported} candidate rows.`;
+  candidateImportStatus.textContent = `${result.imported} baris kandidat berhasil diimpor.`;
   candidateCsvInput.value = "";
   await loadBootstrap();
 });
@@ -1649,5 +1641,5 @@ loadBootstrap()
     showLanding();
   })
   .catch((error) => {
-    document.body.innerHTML = `<main><section class="panel"><h2>Startup error</h2><p>${error.message}</p></section></main>`;
+    document.body.innerHTML = `<main><section class="panel"><h2>Kesalahan saat memulai</h2><p>${error.message}</p></section></main>`;
   });
